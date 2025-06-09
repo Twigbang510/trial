@@ -7,7 +7,7 @@ import { Footer } from "./Footer";
 
 export const LandingPage = () => {
   return (
-    <div className="min-h-screen bg-white text-text-primary">
+    <div className="min-h-screen w-screen bg-white text-text-primary overflow-auto">
       <Navbar />
       <main className="flex flex-col items-center w-screen">
         <Hero />

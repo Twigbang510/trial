@@ -1,17 +1,22 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Phone, Mail } from "lucide-react";
+import { Phone, Mail, ArrowRight } from "lucide-react";
+import { NavUser } from '../layout/NavUser';
+import { useAuth } from "../../hooks/useAuth";
+
 
 const NavLink = ({ children, href }: { children: React.ReactNode; href: string }) => (
-  <a
-    href={href}
-    className="text-text-primary/80 hover:text-text-primary transition-colors"
+  <Link
+    to={href}
+    className="transition-colors text-[#0E2A46]  hover:text-primary [&.active]:text-[#009988] [&.active]:border [&.active]:border-[#009988] [&.active]:rounded-[200px] [&.active]:px-3 [&.active]:py-1"
   >
     {children}
-  </a>
+  </Link>
 );
 
 export const Navbar = () => {
+  const {user}  = useAuth();
+
   return (
     <>
       {/* Top Contact Section */}
@@ -19,7 +24,7 @@ export const Navbar = () => {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="fixed top-0 left-0 right-0 z-50 bg-[#46287C] text-white"
+        className="fixed top-0 left-0 right-0 z-50 bg-[#332288] text-white"
       >
         <div className="w-full flex justify-center px-4">
           <div className="w-full max-w-[1200px] flex items-center justify-between h-12">
@@ -45,7 +50,7 @@ export const Navbar = () => {
         transition={{ duration: 0.5, delay: 0.2 }}
         className="fixed top-12 left-0 right-0 z-40 bg-white shadow-sm"
       >
-        <div className="w-full flex justify-center px-4">
+        <div className="w-full flex justify-center px-4 py-3">
           <div className="w-full max-w-[1200px] flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="text-2xl font-bold text-[#46287C]">
@@ -63,9 +68,15 @@ export const Navbar = () => {
             </div>
 
             {/* Create Account Button */}
-            <button className="bg-[#46287C] text-white px-6 py-2 rounded-lg hover:bg-[#46287C]/90 transition-colors">
-              Create Account
+            {!user && (
+            <button className="bg-[#009988] text-white w-[223.3px] h-[58.5px] px-6 rounded-[200px] hover:bg-primary-dark transition-colors flex items-center justify-between text-[15px] font-normal">
+              <span>Create Account</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
+            )}
+            <div className="flex items-center gap-4">
+              <NavUser />
+            </div>
           </div>
         </div>
       </motion.nav>

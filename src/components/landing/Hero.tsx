@@ -79,16 +79,26 @@ export const Hero = () => {
           <img
             src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80"
             alt="Students in library"
-            className="w-full h-[600px] object-cover rounded-2xl"
+            className="w-full h-[600px] object-cover rounded-2xl relative z-10"
           />
           
           {/* Decorative dots */}
-          <div className="absolute -right-8 top-8 w-24 h-24 grid grid-cols-3 gap-2">
+          <div className="absolute -left-14 bottom-8 w-24 h-24 grid grid-cols-3 gap-2 -z-9">
             {[...Array(9)].map((_, i) => (
               <div key={i} className="w-2 h-2 rounded-full bg-[#46287C]/20" />
             ))}
           </div>
-          <div className="absolute -left-8 bottom-8 w-24 h-24 grid grid-cols-3 gap-2">
+          <div className="absolute -left-14 bottom-[calc(8rem+8px)] w-24 h-24 grid grid-cols-3 gap-2 -z-9">
+            {[...Array(9)].map((_, i) => (
+              <div key={i} className="w-2 h-2 rounded-full bg-[#46287C]/20" />
+            ))}
+          </div>
+          <div className="absolute -left-14 bottom-[calc(14rem+12px)] w-24 h-24 grid grid-cols-3 gap-2 -z-9">
+            {[...Array(9)].map((_, i) => (
+              <div key={i} className="w-2 h-2 rounded-full bg-[#46287C]/20" />
+            ))}
+          </div>
+          <div className="absolute -left-14 bottom-[calc(20rem+16px)] w-24 h-24 grid grid-cols-3 gap-2 -z-9">
             {[...Array(9)].map((_, i) => (
               <div key={i} className="w-2 h-2 rounded-full bg-[#46287C]/20" />
             ))}

@@ -68,7 +68,6 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       return;
     }
 
-    console.log("Client ID:", id);
     setClientId(id);
   }, [clientId]);
 

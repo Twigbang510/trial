@@ -1,15 +1,25 @@
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Facebook, Mail } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import { AuthFormContainer } from './AuthFormContainer';
 
 export const SignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { login, isLoading } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
+    
+    try {
+      await login(email, password);
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
   };
 
   return (
@@ -31,6 +41,8 @@ export const SignIn = () => {
             name="email"
             placeholder="Email address"
             required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
           />
         </div>
@@ -42,6 +54,8 @@ export const SignIn = () => {
             name="password"
             placeholder="Password"
             required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
           />
           <button
@@ -75,9 +89,10 @@ export const SignIn = () => {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full flex items-center justify-center px-4 py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium mt-6"
+          disabled={isLoading}
+          className="w-full flex items-center justify-center px-4 py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Sign In
+          {isLoading ? 'Signing in...' : 'Sign In'}
           <span className="ml-2">→</span>
         </button>
 
@@ -87,16 +102,16 @@ export const SignIn = () => {
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-1"
             >
-              <img src="/facebook-icon.png" alt="Facebook" className="w-5 h-5" />
+              <Facebook className="h-5 w-5 text-[#1877F2]" />
               <span className="text-gray-700">Sign in with Facebook</span>
             </button>
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-1"
             >
-              <img src="/google-icon.png" alt="Google" className="w-5 h-5" />
+              <Mail className="h-5 w-5 text-[#DB4437]" />
               <span className="text-gray-700">Sign in with Google</span>
             </button>
           </div>

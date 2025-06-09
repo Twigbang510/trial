@@ -21,7 +21,7 @@ const UniversityCard = ({ name, type, programs, address }: UniversityCardProps) 
         alt={name}
         className="w-full h-48 object-cover"
       />
-      <span className="absolute top-4 left-4 bg-[#FF7F50] text-white px-4 py-1 rounded-full text-sm">
+      <span className="absolute top-4 left-4 bg-[#FF7F50] text-white px-2 py-1 rounded-md text-sm">
         Top Rated
       </span>
     </div>
@@ -46,7 +46,7 @@ const UniversityCard = ({ name, type, programs, address }: UniversityCardProps) 
         </div>
       </div>
 
-      <button className="flex items-center gap-2 text-[#46287C] mt-6 hover:gap-3 transition-all">
+      <button className="flex items-center gap-2 text-[#46287C] mt-6 hover:gap-3 transition-all ml-auto bg-[#332288] text-white px-4 py-2 rounded-full">
         More
         <ArrowRight className="w-5 h-5" />
       </button>

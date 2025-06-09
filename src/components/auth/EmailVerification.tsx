@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { AuthFormContainer } from './AuthFormContainer';
+import { useNavigate } from '@tanstack/react-router';
 
 export const EmailVerification = () => {
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
+  const navigate = useNavigate();
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) return; // Only allow single digit
 
@@ -27,7 +28,7 @@ export const EmailVerification = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle verification code submission
+    navigate({ to: '/auth/reset-password' }); 
   };
 
   return (
@@ -58,6 +59,7 @@ export const EmailVerification = () => {
         <button
           type="submit"
           className="w-full flex items-center justify-center px-4 py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium"
+          onClick={handleSubmit}
         >
           Verify Email
           <span className="ml-2">→</span>

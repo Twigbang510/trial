@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Facebook, Mail } from 'lucide-react';
 import { AuthFormContainer } from './AuthFormContainer';
 
 export const SignUp = () => {
@@ -24,7 +24,8 @@ export const SignUp = () => {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 ">
+        <div className='grid grid-cols-2 gap-4'>
         {/* Full Name */}
         <div>
           <input
@@ -46,7 +47,7 @@ export const SignUp = () => {
             className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
           />
         </div>
-
+        </div>
         {/* Email */}
         <div>
           <input
@@ -95,17 +96,17 @@ export const SignUp = () => {
         </div>
 
         {/* Terms and Conditions */}
-        <div className="flex items-start mt-2">
+        <div className="flex items-start mt-2 align-center">
           <input
             type="checkbox"
             id="terms"
             checked={acceptTerms}
             onChange={(e) => setAcceptTerms(e.target.checked)}
-            className="mt-1 h-4 w-4 text-[#46287C] focus:ring-[#46287C] border-gray-300 rounded"
+            className="mt-1 h-4 w-4 text-white focus:ring-white border-white rounded bg-transparent checked:bg-white checked:border-white"
           />
           <label htmlFor="terms" className="ml-2 text-sm text-gray-600">
             I've read and agree with your{' '}
-            <Link to="/" className="text-[#46287C]">
+            <Link to="/" className="text-[#332288]">
               Terms of Services
             </Link>
           </label>
@@ -128,16 +129,14 @@ export const SignUp = () => {
               type="button"
               className="w-full flex items-center justify-center px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <img src="/facebook-icon.png" alt="Facebook" className="w-5 h-5" />
+              <Facebook className="h-5 w-5 text-[#1877F2]" />
             </button>
             <button
               type="button"
-              className="w-full flex items-center justify-center px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-center px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-1"
             >
-              <div className="flex items-center gap-2">
-                <img src="/google-icon.png" alt="Google" className="w-5 h-5" />
-                <span>Sign up with Google</span>
-              </div>
+              <Mail className="h-5 w-5 text-[#DB4437]" />
+              <span>Sign up with Google</span>
             </button>
           </div>
         </div>

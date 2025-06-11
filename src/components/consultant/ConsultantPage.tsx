@@ -9,7 +9,7 @@ export const ConsultantPage = () => {
   return (
     <div className="min-h-screen w-screen bg-white text-text-primary overflow-auto">
       <Navbar />
-      <div className="mt-[148px] h-[calc(100vh-148px)] flex px-4">
+      <div className="mt-[148px] h-[calc(100vh-148px)] flex flex-col md:flex-row px-2 md:px-4">
         {/* Left Sidebar */}
         <ChatSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         

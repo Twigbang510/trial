@@ -33,14 +33,14 @@ export const EmailVerification = () => {
 
   return (
     <AuthFormContainer title="Verify email">
-      <div className="mb-8">
-        <p className="text-gray-600">
+      <div className="mb-6 md:mb-8">
+        <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
           We've sent a verification code to your email address. Please enter the code below to verify your account.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="flex gap-3 justify-center">
+      <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+        <div className="flex gap-2 md:gap-3 justify-center">
           {code.map((digit, index) => (
             <input
               key={index}
@@ -50,7 +50,7 @@ export const EmailVerification = () => {
               onChange={(e) => handleChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
               ref={(el) => (inputRefs.current[index] = el)}
-              className="w-12 h-12 text-center text-xl font-semibold bg-[#F4F4F4] rounded-lg outline-none text-gray-900"
+              className="w-10 h-10 md:w-12 md:h-12 text-center text-lg md:text-xl font-semibold bg-[#F4F4F4] rounded-lg outline-none text-gray-900"
               required
             />
           ))}
@@ -58,7 +58,7 @@ export const EmailVerification = () => {
 
         <button
           type="submit"
-          className="w-full flex items-center justify-center px-4 py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium"
+          className="w-full flex items-center justify-center px-4 py-2.5 md:py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium text-sm md:text-base"
           onClick={handleSubmit}
         >
           Verify Email
@@ -68,7 +68,7 @@ export const EmailVerification = () => {
         <div className="text-center">
           <button
             type="button"
-            className="text-sm text-[#46287C]"
+            className="text-sm text-[#46287C] hover:underline"
           >
             Resend Code
           </button>

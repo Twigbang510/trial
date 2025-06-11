@@ -7,9 +7,9 @@ import { Footer } from "./Footer";
 
 export const LandingPage = () => {
   return (
-    <div className="min-h-screen w-screen bg-white text-text-primary overflow-auto">
+    <div className="min-h-screen w-screen bg-white text-text-primary overflow-x-hidden">
       <Navbar />
-      <main className="flex flex-col items-center w-screen">
+      <main className="flex flex-col items-center w-screen px-2 md:px-4">
         <Hero />
         <PersonalityTests />
         <UniversityExplorer />

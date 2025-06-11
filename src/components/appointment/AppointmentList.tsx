@@ -26,24 +26,24 @@ const mockAppointments: Appointment[] = [
 
 export const AppointmentList = ({ activeTab }: AppointmentListProps) => {
   return (
-    <div className="flex-1 ml-4 p-6">
-      <h2 className="text-2xl font-bold text-[#332288] mb-6">
+    <div className="flex-1 p-4 md:p-6 md:ml-4">
+      <h2 className="text-xl md:text-2xl font-bold text-[#332288] mb-4 md:mb-6">
         {activeTab === 'upcoming' ? 'Upcoming Appointments' : 'Appointments History'}
       </h2>
-      <div className=" flex flex-row gap-4 flex-wrap items-center">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {mockAppointments.map((appointment) => (
           <div
             key={appointment.id}
-            className="border-2 border-[#332288] rounded-lg p-6 max-w-[342px]"
+            className="border-2 border-[#332288] rounded-lg p-4 md:p-6 w-full"
           >
-            <h3 className="text-lg font-semibold text-[#332288]">
+            <h3 className="text-base md:text-lg font-semibold text-[#332288] line-clamp-2">
               {appointment.title}
             </h3>
             <p className="text-[#332288] text-sm mb-4">
               {appointment.date}, {appointment.time}
             </p>
             <div className="flex flex-row w-full mt-4 justify-end"> 
-              <button className="bg-[#332288] text-white px-6 py-2 rounded-xl hover:bg-opacity-90 transition-colors">
+              <button className="bg-[#332288] text-white px-4 md:px-6 py-2 rounded-xl hover:bg-opacity-90 transition-colors text-sm md:text-base">
                 VIEW DETAILS
               </button>
             </div>

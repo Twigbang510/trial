@@ -43,30 +43,28 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col border-2 border-[#332288] rounded-lg mb-4">
+    <div className="flex-1 flex flex-col border-2 border-[#332288] rounded-lg mb-4 h-[calc(100vh-200px)]">
       {/* Messages Area */}
-      <div className="flex-1 p-4 overflow-y-auto">
-        <div className="flex flex-col items-center space-y-4">
+      <div className="flex-1 p-2 md:p-4 overflow-y-auto">
+        <div className="flex flex-col items-center space-y-3 md:space-y-4">
           {messages.map((msg) => (
             <div
               key={msg.id}
               className="flex items-center w-full"
             >
               {msg.sender === 'bot' && (
-                <div className="w-10 h-10 rounded-full bg-[#332288] flex items-center justify-center">
-                  <Bot className="w-6 h-6 text-white" />
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
+                  <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
                 </div>
               )}
-              <div className={`flex-1 flex ${msg.sender === 'user' ? 'justify-end pr-4' : 'justify-start pl-4'}`}>
-                <div
-                  className={`w-[80%] rounded-lg p-4 border-2 border-[#332288] bg-white`}
-                >
-                  <p className="text-sm text-[#332288]">{msg.content}</p>
+              <div className={`flex-1 flex ${msg.sender === 'user' ? 'justify-end pr-2 md:pr-4' : 'justify-start pl-2 md:pl-4'}`}>
+                <div className={`w-[85%] md:w-[80%] rounded-lg p-3 md:p-4 border-2 border-[#332288] bg-white break-words whitespace-pre-wrap`}>
+                  <p className="text-xs md:text-sm text-[#332288]">{msg.content}</p>
                 </div>
               </div>
               {msg.sender === 'user' && (
-                <div className="w-10 h-10 rounded-full bg-[#332288] flex items-center justify-center">
-                  <User className="w-6 h-6 text-white" />
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
+                  <User className="w-4 h-4 md:w-6 md:h-6 text-white" />
                 </div>
               )}
             </div>
@@ -75,14 +73,14 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSubmit} className="p-4">   
-        <div className="w-full h-20 bg-opacity-30 bg-[#8C8C8C] rounded-full flex items-center gap-2 p-2">
+      <form onSubmit={handleSubmit} className="p-2 md:p-4">   
+        <div className="w-full h-16 md:h-20 bg-opacity-30 bg-[#8C8C8C] rounded-full flex items-center gap-1 md:gap-2 p-1 md:p-2">
           {/* File Upload Button */}
           <button
             type="button"
-            className="p-2 text-white hover:text-gray-200 transition-colors p-4 bg-[#332288] rounded-full"
+            className="p-1 md:p-2 text-white hover:text-gray-200 transition-colors bg-[#332288] rounded-full"
           >
-            <Paperclip className="w-5 h-5" />
+            <Paperclip className="w-4 h-4 md:w-5 md:h-5" />
           </button>
 
           {/* Message Input */}
@@ -91,23 +89,23 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your prompt here"
-            className="flex-1 px-4 py-2 bg-transparent text-[#424242] placeholder-[#424242] focus:outline-none"
+            className="flex-1 px-2 md:px-4 py-1 md:py-2 bg-transparent text-[#424242] placeholder-[#424242] focus:outline-none text-sm md:text-base"
           />
 
           {/* Voice Input Button */}
           <button
             type="button"
-            className="p-2 text-[#424242] hover:text-gray-200 transition-colors"
+            className="p-1 md:p-2 text-[#424242] hover:text-gray-200 transition-colors"
           >
-            <Mic className="w-5 h-5" />
+            <Mic className="w-4 h-4 md:w-5 md:h-5" />
           </button>
 
           {/* Send Button */}
           <button
             type="submit"
-            className="p-4 border-2 bg-[#332288] rounded-full text-white text-xl hover:text-gray-200 transition-colors"
+            className="p-2 md:p-4 border-2 bg-[#332288] rounded-full text-white hover:text-gray-200 transition-colors"
           >
-            <ArrowRight className="w-5 h-5 text-white" />   
+            <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-white" />   
           </button>
         </div>
       </form>

@@ -15,39 +15,40 @@ export const SignUp = () => {
 
   return (
     <AuthFormContainer title="Create account.">
-      <div className="mb-8">
-        <p className="text-gray-600">
+      <div className="mb-6 md:mb-8">
+        <p className="text-sm md:text-base text-gray-600">
           Already have an account?{' '}
-          <Link to="/auth/signin" className="text-[#46287C] font-medium">
+          <Link to="/auth/signin" className="text-[#46287C] font-medium hover:underline">
             Log In
           </Link>
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 ">
-        <div className='grid grid-cols-2 gap-4'>
-        {/* Full Name */}
-        <div>
-          <input
-            type="text"
-            name="fullName"
-            placeholder="Full Name"
-            required
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
-          />
+      <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
+        <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4'>
+          {/* Full Name */}
+          <div>
+            <input
+              type="text"
+              name="fullName"
+              placeholder="Full Name"
+              required
+              className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
+            />
+          </div>
+
+          {/* Username */}
+          <div>
+            <input
+              type="text"
+              name="username"
+              placeholder="Username"
+              required
+              className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
+            />
+          </div>
         </div>
 
-        {/* Username */}
-        <div>
-          <input
-            type="text"
-            name="username"
-            placeholder="Username"
-            required
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
-          />
-        </div>
-        </div>
         {/* Email */}
         <div>
           <input
@@ -55,7 +56,7 @@ export const SignUp = () => {
             name="email"
             placeholder="Email address"
             required
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
+            className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
         </div>
 
@@ -66,14 +67,14 @@ export const SignUp = () => {
             name="password"
             placeholder="Password"
             required
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
+            className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
           >
-            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showPassword ? <EyeOff className="w-4 h-4 md:w-5 md:h-5" /> : <Eye className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
 
@@ -84,19 +85,19 @@ export const SignUp = () => {
             name="confirmPassword"
             placeholder="Confirm Password"
             required
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
+            className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
           >
-            {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showConfirmPassword ? <EyeOff className="w-4 h-4 md:w-5 md:h-5" /> : <Eye className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
 
         {/* Terms and Conditions */}
-        <div className="flex items-start mt-2 align-center">
+        <div className="flex items-start mt-2 items-center">
           <input
             type="checkbox"
             id="terms"
@@ -104,9 +105,9 @@ export const SignUp = () => {
             onChange={(e) => setAcceptTerms(e.target.checked)}
             className="mt-1 h-4 w-4 text-white focus:ring-white border-white rounded bg-transparent checked:bg-white checked:border-white"
           />
-          <label htmlFor="terms" className="ml-2 text-sm text-gray-600">
+          <label htmlFor="terms" className="ml-2 text-xs md:text-sm text-gray-600 text-bottom">
             I've read and agree with your{' '}
-            <Link to="/" className="text-[#332288]">
+            <Link to="/" className="text-[#332288] hover:underline">
               Terms of Services
             </Link>
           </label>
@@ -115,7 +116,7 @@ export const SignUp = () => {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full flex items-center justify-center px-4 py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium mt-6"
+          className="w-full flex items-center justify-center px-4 py-2.5 md:py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium mt-4 md:mt-6 text-sm md:text-base"
         >
           Create Account
           <span className="ml-2">→</span>
@@ -123,20 +124,21 @@ export const SignUp = () => {
 
         {/* Social Sign Up */}
         <div className="mt-4 text-center text-gray-600">
-          <p className="mb-4">or</p>
-          <div className="grid grid-cols-2 gap-4">
+          <p className="text-sm mb-3 md:mb-4">or</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             <button
               type="button"
-              className="w-full flex items-center justify-center px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 md:px-4 py-2 md:py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Facebook className="h-5 w-5 text-[#1877F2]" />
+              <Facebook className="h-4 w-4 md:h-5 md:w-5 text-[#1877F2]" />
+              <span className="text-sm md:text-base text-gray-700">Sign up with Facebook</span>
             </button>
             <button
               type="button"
-              className="w-full flex items-center justify-center px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-1"
+              className="w-full flex items-center justify-center gap-2 px-3 md:px-4 py-2 md:py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Mail className="h-5 w-5 text-[#DB4437]" />
-              <span>Sign up with Google</span>
+              <Mail className="h-4 w-4 md:h-5 md:w-5 text-[#DB4437]" />
+              <span className="text-sm md:text-base text-gray-700">Sign up with Google</span>
             </button>
           </div>
         </div>

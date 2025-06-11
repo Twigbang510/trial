@@ -10,8 +10,8 @@ export const AppointmentPage = () => {
 
   return (
     <div className="min-h-screen w-screen bg-white text-text-primary overflow-auto">
-        <Navbar />  
-      <div className="flex mt-[148px] h-[calc(100vh-148px)] px-4">
+      <Navbar />  
+      <div className="flex flex-col md:flex-row mt-[148px] h-[calc(100vh-148px)] px-2 md:px-4">
         <AppointmentSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <AppointmentList activeTab={activeTab} />
       </div>

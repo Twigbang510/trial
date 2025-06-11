@@ -24,16 +24,16 @@ export const SignIn = () => {
 
   return (
     <AuthFormContainer title="Sign in">
-      <div className="mb-8">
-        <p className="text-gray-600">
+      <div className="mb-6 md:mb-8">
+        <p className="text-sm md:text-base text-gray-600">
           Don't have account{' '}
-          <Link to="/auth/signup" className="text-[#46287C]">
+          <Link to="/auth/signup" className="text-[#46287C] hover:underline">
             Create Account
           </Link>
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
         {/* Email */}
         <div>
           <input
@@ -43,7 +43,7 @@ export const SignIn = () => {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
+            className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
         </div>
 
@@ -56,19 +56,19 @@ export const SignIn = () => {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500"
+            className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
           >
-            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showPassword ? <EyeOff className="w-4 h-4 md:w-5 md:h-5" /> : <Eye className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
 
         {/* Remember Me and Forgot Password */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -81,7 +81,7 @@ export const SignIn = () => {
               Remember Me
             </label>
           </div>
-          <Link to="/auth/forgot-password" className="text-sm text-[#46287C]">
+          <Link to="/auth/forgot-password" className="text-sm text-[#46287C] hover:underline">
             Forget password
           </Link>
         </div>
@@ -90,7 +90,7 @@ export const SignIn = () => {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full flex items-center justify-center px-4 py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center px-4 py-2.5 md:py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium mt-4 md:mt-6 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
         >
           {isLoading ? 'Signing in...' : 'Sign In'}
           <span className="ml-2">→</span>
@@ -98,21 +98,21 @@ export const SignIn = () => {
 
         {/* Social Sign In */}
         <div className="mt-4 text-center">
-          <p className="text-sm text-gray-600 mb-4">or</p>
-          <div className="grid grid-cols-2 gap-4">
+          <p className="text-sm text-gray-600 mb-3 md:mb-4">or</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-1"
+              className="w-full flex items-center justify-center gap-2 px-3 md:px-4 py-2 md:py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Facebook className="h-5 w-5 text-[#1877F2]" />
-              <span className="text-gray-700">Sign in with Facebook</span>
+              <Facebook className="h-4 w-4 md:h-5 md:w-5 text-[#1877F2]" />
+              <span className="text-sm md:text-base text-gray-700">Sign in with Facebook</span>
             </button>
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-1"
+              className="w-full flex items-center justify-center gap-2 px-3 md:px-4 py-2 md:py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Mail className="h-5 w-5 text-[#DB4437]" />
-              <span className="text-gray-700">Sign in with Google</span>
+              <Mail className="h-4 w-4 md:h-5 md:w-5 text-[#DB4437]" />
+              <span className="text-sm md:text-base text-gray-700">Sign in with Google</span>
             </button>
           </div>
         </div>

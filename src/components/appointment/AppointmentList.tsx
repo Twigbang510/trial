@@ -1,3 +1,5 @@
+import { AnimatePresence, motion } from "framer-motion";
+
 interface Appointment {
   id: string;
   title: string;
@@ -30,7 +32,14 @@ export const AppointmentList = ({ activeTab }: AppointmentListProps) => {
       <h2 className="text-xl md:text-2xl font-bold text-[#332288] mb-4 md:mb-6">
         {activeTab === 'upcoming' ? 'Upcoming Appointments' : 'Appointments History'}
       </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+      <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ duration: 0.3 }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
+      >
         {mockAppointments.map((appointment) => (
           <div
             key={appointment.id}
@@ -49,7 +58,8 @@ export const AppointmentList = ({ activeTab }: AppointmentListProps) => {
             </div>
           </div>
         ))}
-      </div>
+      </motion.div>
+      </AnimatePresence>
     </div>
   );
 }; 

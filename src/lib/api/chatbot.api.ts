@@ -1,49 +1,96 @@
-import { chatbotRequest } from "../http";
+import axios from "axios";
+import { API_URL } from "@/config/app";
 
-export const URL_LOGIN = "/auth/login";
-export const URL_LOGOUT = "";
-export const URL_REFRESH_TOKEN = "";
-export const URL_SIGNUP = "/auth/register";
-export const URL_ME = "/auth/me";
-export const URL_SESSION_ACCESS_TOKEN = "/sessions/auth/access-token";
-export const URL_SESSION_AUTH = "/sessions/auth/auth";
+const CHATBOT_API_URL = `${API_URL}/api/v1/chatbot`;
+
+interface Message {
+  content: string;
+  sender: string;
+}
+
+interface ChatRequest {
+  message: string;
+  conversation_id?: number;
+  context?: string;
+}
+
+interface ChatResponse {
+  response: string;
+  conversation_id: number;
+  is_appropriate: boolean;
+}
+
+interface Conversation {
+  id: number;
+  title: string | null;
+  context: string;
+  created_at: string;
+  updated_at: string | null;
+  message_count: number;
+  last_message: string | null;
+}
+
+interface ConversationDetail {
+  id: number;
+  title: string | null;
+  context: string;
+  created_at: string;
+  updated_at: string | null;
+  messages: {
+    id: number;
+    content: string;
+    sender: string;
+    is_appropriate: boolean;
+    created_at: string;
+  }[];
+}
 
 const chatbotApi = {
-  getClientId: async (): Promise<string | undefined> => {
+  chat: async (message: string, conversationId?: number, context: string = 'consultant'): Promise<ChatResponse> => {
     try {
-      const response = await chatbotRequest.get("/getClientId");
-      return response.data.client_id;
+      const response = await axios.post<ChatResponse>(`${CHATBOT_API_URL}/chat`, {
+        message,
+        conversation_id: conversationId,
+        context
+      });
+      return response.data;
     } catch (error) {
-      console.error("Error fetching client ID:", error);
-      return undefined;
+      console.error("Error in chatbot API:", error);
+      return {
+        response: "Sorry, I couldn't process your request. Please try again.",
+        conversation_id: conversationId || 0,
+        is_appropriate: false
+      };
     }
   },
-  chat: async (
-    query: string,
-    clientId: string
-  ): Promise<{ content: string }> => {
+
+  getConversations: async (): Promise<Conversation[]> => {
     try {
-      const response = await chatbotRequest.post(
-        "/ask",
-        {
-          user_query: query,
-          voice_code: "vi-VN",
-          enable_suggestion: true,
-        },
-        {
-          headers: {
-            ClientId: clientId,
-          },
-        }
-      );
-      return {
-        content: response.data?.assistant_reply?.content || "",
-      };
+      const response = await axios.get<Conversation[]>(`${CHATBOT_API_URL}/conversations`);
+      return response.data;
     } catch (error) {
-      console.log("Error in chatbot API:", error);
-      return {
-        content: "Sorry, I couldn't process your request.",
-      };
+      console.error("Error fetching conversations:", error);
+      return [];
+    }
+  },
+
+  getConversation: async (conversationId: number): Promise<ConversationDetail | null> => {
+    try {
+      const response = await axios.get<ConversationDetail>(`${CHATBOT_API_URL}/conversations/${conversationId}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching conversation:", error);
+      return null;
+    }
+  },
+
+  deleteConversation: async (conversationId: number): Promise<boolean> => {
+    try {
+      await axios.delete(`${CHATBOT_API_URL}/conversations/${conversationId}`);
+      return true;
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      return false;
     }
   },
 };

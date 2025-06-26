@@ -1,4 +1,4 @@
-import {SERVER_URL} from "@/config/app.ts";
+import {API_URL} from "@/config/app.ts";
 import request from "@/lib/http.ts";
 
 export const URL_MESSENGER_CONVERSATIONS = '/conversations';
@@ -24,7 +24,7 @@ const messengerApi = {
 
   switchHumanTakeover: async (conversationId: string) => {
     const res = await fetch(
-      `${SERVER_URL}${URL_MESSENGER_CONVERSATIONS}/${conversationId}/switch`,
+      `${API_URL}${URL_MESSENGER_CONVERSATIONS}/${conversationId}/switch`,
       {
         method: 'POST',
       }
@@ -34,7 +34,7 @@ const messengerApi = {
   },
 
   syncConversations: async (socialAppId?: string) => {
-    const res = await fetch(`${SERVER_URL}${URL_MESSENGER}/${socialAppId}/sync`, {
+    const res = await fetch(`${API_URL}${URL_MESSENGER}/${socialAppId}/sync`, {
       method: 'POST',
     });
     return res.status === 200;

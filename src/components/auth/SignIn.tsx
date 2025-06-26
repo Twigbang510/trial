@@ -9,16 +9,23 @@ export const SignIn = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const { login, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError('');
     try {
       await login(email, password);
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Login failed:', error);
+      navigate({ to: '/' });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map((e: any) => e.msg).join(', '));
+      } else {
+        setError(detail || 'Login failed');
+      }
     }
   };
 
@@ -32,7 +39,17 @@ export const SignIn = () => {
           </Link>
         </p>
       </div>
-
+      {error && (
+        <div className="text-red-500 mb-2">
+          {Array.isArray(error)
+            ? error.map((e, idx) => (
+                <div key={idx}>{e.msg || JSON.stringify(e)}</div>
+              ))
+            : typeof error === 'object'
+              ? (error as any).msg || JSON.stringify(error)
+              : error}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
         {/* Email */}
         <div>
@@ -46,7 +63,6 @@ export const SignIn = () => {
             className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
         </div>
-
         {/* Password */}
         <div className="relative">
           <input
@@ -66,7 +82,6 @@ export const SignIn = () => {
             {showPassword ? <EyeOff className="w-4 h-4 md:w-5 md:h-5" /> : <Eye className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
-
         {/* Remember Me and Forgot Password */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
           <div className="flex items-center">
@@ -85,7 +100,6 @@ export const SignIn = () => {
             Forget password
           </Link>
         </div>
-
         {/* Submit Button */}
         <button
           type="submit"
@@ -95,7 +109,6 @@ export const SignIn = () => {
           {isLoading ? 'Signing in...' : 'Sign In'}
           <span className="ml-2">→</span>
         </button>
-
         {/* Social Sign In */}
         <div className="mt-4 text-center">
           <p className="text-sm text-gray-600 mb-3 md:mb-4">or</p>

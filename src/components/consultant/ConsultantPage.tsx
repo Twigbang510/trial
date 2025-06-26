@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { ChatSidebar } from './ChatSidebar';
-import { ChatWindow } from './ChatWindow';
+import ChatWindow from './ChatWindow';
 import { Navbar } from '../landing/Navbar';
 
 export const ConsultantPage = () => {
   const [activeTab, setActiveTab] = useState<'new-chat' | 'career-explorer'>('new-chat');
+  // const [currentConversationId, setCurrentConversationId] = useState<number | undefined>();
+
+      const handleConversationChange = (conversationId: number) => {
+      // setCurrentConversationId(conversationId);
+      console.log('Conversation changed:', conversationId);
+    };
 
   return (
     <div className="min-h-screen w-screen bg-white text-text-primary overflow-auto">
@@ -14,7 +20,10 @@ export const ConsultantPage = () => {
         <ChatSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         
         {/* Main Chat Area */}
-        <ChatWindow activeTab={activeTab} />
+        <ChatWindow 
+          activeTab={activeTab} 
+          onConversationChange={handleConversationChange}
+        />
       </div>
     </div>
   );

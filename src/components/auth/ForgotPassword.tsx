@@ -1,13 +1,36 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ArrowRight, Facebook, Mail } from 'lucide-react';
+import { Facebook, Mail } from 'lucide-react';
 import { AuthFormContainer } from './AuthFormContainer';
 import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
+import authApi from '@/lib/api/auth.api';
 
 export const ForgotPassword = () => {
   const navigate = useNavigate();
-  const handleSubmit = (e: React.FormEvent) => {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate({ to: '/auth/verification' });
+    setError('');
+    setSuccess('');
+    setIsLoading(true);
+    try {
+      await authApi.forgotPassword(email);
+      // Lưu email để dùng ở trang verification
+      localStorage.setItem('reset_email', email);
+      setSuccess('Verification code sent to your email.');
+      setTimeout(() => {
+        navigate({ to: '/auth/verification' });
+      }, 2000);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setError(detail || 'Failed to send reset instructions');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -29,7 +52,8 @@ export const ForgotPassword = () => {
           </p>
         </div>
       </div>
-
+      {error && <div className="text-red-500 mb-2">{error}</div>}
+      {success && <div className="text-green-600 mb-2">{success}</div>}
       <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
         {/* Email */}
         <div>
@@ -38,20 +62,20 @@ export const ForgotPassword = () => {
             name="email"
             placeholder="Email address"
             required
+            value={email}
+            onChange={e => setEmail(e.target.value)}
             className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
         </div>
-
         {/* Submit Button */}
         <button
           type="submit"
           className="w-full flex items-center justify-center px-4 py-2.5 md:py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium text-sm md:text-base"
-          onClick={handleSubmit}  
+          disabled={isLoading}
         >
-          Send Reset Instructions
+          {isLoading ? 'Sending...' : 'Send Reset Instructions'}
           <span className="ml-2">→</span>
         </button>
-
         {/* Divider */}
         <div className="relative my-6 md:my-8">
           <div className="absolute inset-0 flex items-center">
@@ -61,7 +85,6 @@ export const ForgotPassword = () => {
             <span className="px-2 bg-white text-gray-500">Or</span>
           </div>
         </div>
-
         {/* Social Sign In */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
           <button

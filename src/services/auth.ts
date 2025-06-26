@@ -1,24 +1,18 @@
+import authApi from "@/lib/api/auth.api";
+
 export interface User {
   id: string;
   email: string;
-  name: string;
-  role: 'student' | 'university' | 'admin';
+  username?: string;
+  full_name?: string;
+  is_active?: boolean;
+  is_verified?: boolean;
 }
 
 export interface AuthState {
   user: User | null;
   token: string | null;
 }
-
-// Mock user data
-const MOCK_USER: User = {
-  id: '1',
-  email: 'test@example.com',
-  name: 'Test User',
-  role: 'student'
-};
-
-const MOCK_TOKEN = 'mock-jwt-token';
 
 const AUTH_STORAGE_KEY = 'auth_state';
 
@@ -31,14 +25,13 @@ export const authService = {
     return { user: null, token: null };
   },
 
-  login(email: string, password: string): Promise<AuthState> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const state = { user: MOCK_USER, token: MOCK_TOKEN };
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(state));
-        resolve(state);
-      }, 1000);
-    });
+  async login(email: string, password: string): Promise<AuthState> {
+    const res = await authApi.login({ email, password });
+    const token = res.data.access_token || res.data.accessToken || "";
+    const user = res.data.user || { email };
+    const state = { user, token };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(state));
+    return state;
   },
 
   logout(): void {

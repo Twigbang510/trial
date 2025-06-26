@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Mic, Paperclip, ArrowRight, User, Bot, Focus, Contact } from 'lucide-react';
+import { Mic, Paperclip, ArrowRight, User, Bot } from 'lucide-react';
 import { content } from '@/constants/content';
 import { motion, AnimatePresence } from 'framer-motion';
+import chatbotApi from '@/lib/api/chatbot.api';
 
 interface Message {
   id: string;
@@ -12,11 +13,42 @@ interface Message {
 
 interface ChatWindowProps {
   activeTab: 'new-chat' | 'career-explorer';
+  onConversationChange?: (conversationId: number) => void;
 }
 
-export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
+// Validation functions
+const validateMessage = (message: string): { isValid: boolean; error?: string } => {
+  const trimmedMessage = message.trim();
+  
+  // Check if empty or only whitespace
+  if (!trimmedMessage) {
+    return { isValid: false, error: "Message cannot be empty" };
+  }
+  
+  // Check if only contains emojis (basic check)
+  const emojiRegex = /^[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+$/u;
+  if (emojiRegex.test(trimmedMessage)) {
+    return { isValid: false, error: "Message cannot contain only emojis" };
+  }
+  
+  // Check if too short (less than 2 characters)
+  if (trimmedMessage.length < 2) {
+    return { isValid: false, error: "Message must be at least 2 characters" };
+  }
+  
+  // Check if too long (more than 1000 characters)
+  if (trimmedMessage.length > 1000) {
+    return { isValid: false, error: "Message cannot be more than 1000 characters" };
+  }
+  
+  return { isValid: true };
+};
+
+const ChatWindow = ({ activeTab, onConversationChange }: ChatWindowProps) => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [validationError, setValidationError] = useState<string>('');
   const [mbtiResult, setMbtiResult] = useState('');
   const [hollandResults, setHollandResults] = useState({
     realistic: '',
@@ -27,32 +59,75 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
     artistic: ''
   });
   const [hollandSubmit, setHollandSubmit] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<number | undefined>();
 
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    
+    // Clear previous validation error
+    setValidationError('');
+    
+    // Validate message first
+    const validation = validateMessage(message);
+    if (!validation.isValid) {
+      setValidationError(validation.error!);
+      return;
+    }
+    
+    if (isLoading) return;
 
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: message,
+      content: message.trim(),
       sender: 'user',
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMessage]);
     setMessage('');
+    setIsLoading(true);
 
-    // Simulate bot response
-    setTimeout(() => {
+    try {
+      // Get response from Gemini with conversation storage
+      const response = await chatbotApi.chat(message.trim(), currentConversationId, 'consultant');
+      
+      // Add bot response
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: "I'm analyzing your request. Please give me a moment to provide a detailed response.",
+        content: response.response,
         sender: 'bot',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, botMessage]);
-    }, 1000);
+
+      // Update conversation ID if this is a new conversation
+      if (!currentConversationId && response.conversation_id) {
+        setCurrentConversationId(response.conversation_id);
+        onConversationChange?.(response.conversation_id);
+      }
+    } catch (error) {
+      console.error('Error getting bot response:', error);
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "I'm sorry, I'm having trouble processing your request right now. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setMessage(newValue);
+    
+    // Clear validation error when user starts typing
+    if (validationError) {
+      setValidationError('');
+    }
   };
 
   const handleHollandSubmit = () => {
@@ -200,6 +275,7 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
                 </motion.div>
               )}
             </AnimatePresence>
+
           </div>
 
         </div>
@@ -235,6 +311,23 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
               )}
             </div>
           ))}
+        
+          {/* Loading indicator */}
+          {isLoading && (
+            <div className="flex items-center w-full">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
+                <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
+              </div>
+              <div className="flex-1 flex justify-start pl-2 md:pl-4">
+                <div className="w-[85%] md:w-[80%] rounded-lg p-3 md:p-4 border-2 border-[#332288] bg-white">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#332288]"></div>
+                    <p className="text-xs md:text-sm text-[#332288]">AI is thinking...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -253,15 +346,17 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
           <input
             type="text"
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Type your prompt here"
             className="flex-1 px-2 md:px-4 py-1 md:py-2 bg-transparent text-[#424242] placeholder-[#424242] focus:outline-none text-sm md:text-base"
+            disabled={isLoading}
           />
 
           {/* Voice Input Button */}
           <button
             type="button"
             className="p-1 md:p-2 text-[#424242] hover:text-gray-200 transition-colors"
+            disabled={isLoading}
           >
             <Mic className="w-4 h-4 md:w-5 md:h-5" />
           </button>
@@ -269,12 +364,22 @@ export const ChatWindow = ({ activeTab }: ChatWindowProps) => {
           {/* Send Button */}
           <button
             type="submit"
-            className="p-2 md:p-4 border-2 bg-[#332288] rounded-full text-white hover:text-gray-200 transition-colors"
+            className="p-2 md:p-4 border-2 bg-[#332288] rounded-full text-white hover:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading || !message.trim()}
           >
             <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-white" />   
           </button>
         </div>
+        
+        {/* Validation Error */}
+        {validationError && (
+          <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-xs text-red-600">{validationError}</p>
+          </div>
+        )}
       </form>
     </div>
   );
-}; 
+};
+
+export default ChatWindow; 

@@ -2,15 +2,55 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Eye, EyeOff, Facebook, Mail } from 'lucide-react';
 import { AuthFormContainer } from './AuthFormContainer';
+import authApi from '@/lib/api/auth.api';
 
 export const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [form, setForm] = useState({
+    full_name: '',
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
+    setError('');
+    setSuccess('');
+    if (!acceptTerms) {
+      setError('You must accept the terms.');
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    try {
+      console.log("form", form);
+      await authApi.registerAccount({
+        email: form.email,
+        password: form.password,
+        full_name: form.full_name,
+        username: form.username,
+      });
+      setSuccess('Account created! You can now log in.');
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map((e: any) => e.msg).join(', '));
+      } else {
+        setError(detail || 'Registration failed');
+      }
+    }
   };
 
   return (
@@ -23,20 +63,30 @@ export const SignUp = () => {
           </Link>
         </p>
       </div>
-
+      {error && (
+        <div className="text-red-500 mb-2">
+          {Array.isArray(error)
+            ? error.map((e, idx) => (
+                <div key={idx}>{e.msg || JSON.stringify(e)}</div>
+              ))
+            : error}
+        </div>
+      )}
+      {success && <div className="text-green-600 mb-2">{success}</div>}
       <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
         <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4'>
           {/* Full Name */}
           <div>
             <input
               type="text"
-              name="fullName"
+              name="full_name"
               placeholder="Full Name"
               required
+              value={form.full_name}
+              onChange={handleChange}
               className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
             />
           </div>
-
           {/* Username */}
           <div>
             <input
@@ -44,11 +94,12 @@ export const SignUp = () => {
               name="username"
               placeholder="Username"
               required
+              value={form.username}
+              onChange={handleChange}
               className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
             />
           </div>
         </div>
-
         {/* Email */}
         <div>
           <input
@@ -56,10 +107,11 @@ export const SignUp = () => {
             name="email"
             placeholder="Email address"
             required
+            value={form.email}
+            onChange={handleChange}
             className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
         </div>
-
         {/* Password */}
         <div className="relative">
           <input
@@ -67,6 +119,8 @@ export const SignUp = () => {
             name="password"
             placeholder="Password"
             required
+            value={form.password}
+            onChange={handleChange}
             className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
           <button
@@ -77,7 +131,6 @@ export const SignUp = () => {
             {showPassword ? <EyeOff className="w-4 h-4 md:w-5 md:h-5" /> : <Eye className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
-
         {/* Confirm Password */}
         <div className="relative">
           <input
@@ -85,6 +138,8 @@ export const SignUp = () => {
             name="confirmPassword"
             placeholder="Confirm Password"
             required
+            value={form.confirmPassword}
+            onChange={handleChange}
             className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[#F4F4F4] rounded-lg outline-none text-gray-900 placeholder-gray-500 text-sm md:text-base"
           />
           <button
@@ -95,7 +150,6 @@ export const SignUp = () => {
             {showConfirmPassword ? <EyeOff className="w-4 h-4 md:w-5 md:h-5" /> : <Eye className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
-
         {/* Terms and Conditions */}
         <div className="flex items-start mt-2 items-center">
           <input
@@ -112,7 +166,6 @@ export const SignUp = () => {
             </Link>
           </label>
         </div>
-
         {/* Submit Button */}
         <button
           type="submit"
@@ -121,7 +174,6 @@ export const SignUp = () => {
           Create Account
           <span className="ml-2">→</span>
         </button>
-
         {/* Social Sign Up */}
         <div className="mt-4 text-center text-gray-600">
           <p className="text-sm mb-3 md:mb-4">or</p>

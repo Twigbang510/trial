@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react';
 import { AuthFormContainer } from './AuthFormContainer';
 import { useNavigate } from '@tanstack/react-router';
+import authApi from '@/lib/api/auth.api';
 
 export const EmailVerification = () => {
   const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
+
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) return; // Only allow single digit
 
@@ -26,9 +30,35 @@ export const EmailVerification = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate({ to: '/auth/reset-password' }); 
+    setError('');
+    setIsLoading(true);
+    
+    const verificationCode = code.join('');
+    if (verificationCode.length !== 6) {
+      setError('Please enter the complete 6-digit code');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Lấy email từ localStorage (đã lưu khi gửi forgot password)
+      const email = localStorage.getItem('reset_email') || '';
+      if (!email) {
+        setError('Email not found. Please try forgot password again.');
+        setIsLoading(false);
+        return;
+      }
+
+      await authApi.verifyCode(email, verificationCode);
+      navigate({ to: '/auth/reset-password' });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setError(detail || 'Invalid verification code');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -38,7 +68,7 @@ export const EmailVerification = () => {
           We've sent a verification code to your email address. Please enter the code below to verify your account.
         </p>
       </div>
-
+      {error && <div className="text-red-500 mb-2 text-center">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
         <div className="flex gap-2 md:gap-3 justify-center">
           {code.map((digit, index) => (
@@ -59,9 +89,9 @@ export const EmailVerification = () => {
         <button
           type="submit"
           className="w-full flex items-center justify-center px-4 py-2.5 md:py-3 bg-[#46287C] text-white rounded-lg hover:bg-[#46287C]/90 transition-colors font-medium text-sm md:text-base"
-          onClick={handleSubmit}
+          disabled={isLoading}
         >
-          Verify Email
+          {isLoading ? 'Verifying...' : 'Verify Email'}
           <span className="ml-2">→</span>
         </button>
 

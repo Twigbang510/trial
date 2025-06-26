@@ -1,5 +1,4 @@
-import { CHATBOT_URL, SECONDS_IN_DAY, STAGING_SERVER_URL } from "@/config/app";
-import { SERVER_URL } from "@/config/app.ts";
+import { CHATBOT_URL, SECONDS_IN_DAY, API_URL } from "@/config/app";
 import HttpStatusCode from "@/constants/httpStatusCode.enum";
 import {
   URL_LOGIN,
@@ -18,6 +17,8 @@ import {
   setAccessTokenToLS,
   setRefreshTokenToLS,
 } from "./auth";
+// import { EStorageKey } from "@/constants/storage";
+// import { LocalStorage } from "@/lib/services/local-storage";
 
 export class Http {
   instance: AxiosInstance;
@@ -27,9 +28,7 @@ export class Http {
   constructor(baseUrl?: string) {
     const serverUrl = baseUrl
       ? baseUrl
-      : process.env.NODE_ENV === "production"
-      ? SERVER_URL
-      : STAGING_SERVER_URL;
+      : API_URL;
     console.log("Server URL: ", serverUrl, baseUrl);
 
     this.token = getAccessTokenFromLS();

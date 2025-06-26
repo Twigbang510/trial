@@ -1,4 +1,4 @@
-import { SERVER_URL } from "@/config/app";
+import { API_URL } from "@/config/app";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import axios from "axios";
 
@@ -30,7 +30,7 @@ export const useCreatePois = () => {
   return useMutation({
     mutationFn: async (pois: PoiRequest[]) => {
       const response = await axios.post(
-        `${SERVER_URL}/api/pois/basic`,
+        `${API_URL}/api/pois/basic`,
         pois
       );
       return response.data;
@@ -43,7 +43,7 @@ export const useGetPois = () => {
     queryKey: ["pois"],
     queryFn: async () => {
       const response = await axios.get<PoiResponse[]>(
-        `${SERVER_URL}/api/pois`,
+        `${API_URL}/api/pois`,
         {
           params: {
             lang: "vi-south"

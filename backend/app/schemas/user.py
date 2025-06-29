@@ -1,24 +1,58 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
+from enum import Enum
 
+class UserStatus(str, Enum):
+    NOT_SCHEDULE = "Not Schedule"
+    PROCESSING = "Processing"
+    SCHEDULED = "Scheduled"
+
+# Shared properties
 class UserBase(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
     username: Optional[str] = None
     full_name: Optional[str] = None
-
-class UserCreate(UserBase):
-    password: str
-    hashed_password: Optional[str] = None
     is_active: Optional[bool] = True
+    is_verified: Optional[bool] = False
+    status: Optional[UserStatus] = UserStatus.NOT_SCHEDULE
+    violation_count: Optional[int] = 0
+
+# Properties to receive via API on creation
+class UserCreate(UserBase):
+    email: EmailStr
+    username: str
+    password: str
+
+# Properties to receive via API on update
+class UserUpdate(UserBase):
+    password: Optional[str] = None
+
+# Additional properties to return via API
+class User(UserBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# Separate schemas for different purposes
+class UserOut(BaseModel):
+    id: int
+    email: str
+    username: str
+    full_name: Optional[str] = None
+    is_active: bool
+    is_verified: bool
+    status: UserStatus
+    violation_count: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
-
-class UserOut(UserBase):
-    id: int
-    is_active: bool
-    is_verified: bool
-
-    class Config:
-        from_attributes = True 
+    password: str 

@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Phone, Mail, ArrowRight, Menu, X } from "lucide-react";
 import { NavUser } from '../layout/NavUser';
@@ -17,7 +17,7 @@ const NavLink = ({ children, href }: { children: React.ReactNode; href: string }
 export const Navbar = () => {
   const {user} = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
+  const navigate = useNavigate();
   return (
     <>
       {/* Top Contact Section */}
@@ -82,10 +82,10 @@ export const Navbar = () => {
               <NavLink href="/contact">Contact</NavLink>
             </div>
 
-            {/* Create Account Button */}
+            {/* Sign In Button */}
             {!user && (
-              <button className="hidden md:flex bg-[#009988] text-white w-[180px] md:w-[223.3px] h-[45px] md:h-[58.5px] px-4 md:px-6 rounded-[200px] hover:bg-primary-dark transition-colors items-center justify-between text-sm md:text-[15px] font-normal">
-                <span>Create Account</span>
+              <button onClick={() => navigate ({ to: '/auth/signin' })} className="hidden md:flex bg-[#009988] text-white w-[180px] md:w-[150.3px] h-[45px] md:h-[58.5px] px-4 md:px-6 rounded-[200px] hover:bg-primary-dark transition-colors items-center justify-between text-sm md:text-[15px] font-normal">
+                <span>Sign In</span>
                 <ArrowRight className="w-3 h-3 md:w-4 md:h-4" />
               </button>
             )}

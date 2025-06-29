@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 
@@ -41,6 +42,7 @@ const TagLine = () => (
 );
 
 export const Hero = () => {
+  const navigate = useNavigate();
   return (
     <section className="relative min-h-screen pt-20 md:pt-28 pb-10 md:pb-20 overflow-hidden">
       <div className="w-full max-w-[1200px] mx-auto px-2 md:px-4 grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 items-center">
@@ -63,7 +65,7 @@ export const Hero = () => {
             <p className="text-gray-600 text-sm md:text-base">Let our agent guide your journey.</p>
           </div>
 
-          <button className="flex items-center gap-2 bg-[#46287C] text-white px-6 md:px-8 py-3 md:py-4 rounded-full w-fit hover:bg-[#46287C]/90 transition-all text-sm md:text-base">
+          <button onClick={() => navigate({ to: '/consultant' })} className="flex items-center gap-2 bg-[#46287C] text-white px-6 md:px-8 py-3 md:py-4 rounded-full w-fit hover:bg-[#46287C]/90 transition-all text-sm md:text-base">
             Chat Now
             <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
           </button>

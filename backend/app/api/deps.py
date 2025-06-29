@@ -6,11 +6,11 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import ALGORITHM
-from app.crud.crud_user import user
+from app.crud.crud_user import user_crud
 from app.models.user import User
 from typing import Optional
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/signin", auto_error=False)
 
 def get_db():
     db = SessionLocal()
@@ -27,14 +27,20 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    # Check if token is provided
+    if not token:
+        raise credentials_exception
+        
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id: int = payload.get("user_id")
+        if user_id is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user_obj = user.get_by_email(db, email=username)
+    
+    user_obj = user_crud.get(db, id=user_id)
     if user_obj is None:
         raise credentials_exception
     return user_obj
@@ -48,11 +54,11 @@ def get_current_user_optional(
     
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id: int = payload.get("user_id")
+        if user_id is None:
             return None
     except JWTError:
         return None
     
-    user_obj = user.get_by_email(db, email=username)
+    user_obj = user_crud.get(db, id=user_id)
     return user_obj 

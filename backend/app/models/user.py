@@ -1,7 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+import enum
 from app.db.base import Base
+
+class UserStatus(enum.Enum):
+    NOT_SCHEDULE = "Not Schedule"
+    PROCESSING = "Processing"
+    SCHEDULED = "Scheduled"
 
 class User(Base):
     __tablename__ = "users"
@@ -12,6 +18,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    status = Column(SQLEnum(UserStatus), default=UserStatus.NOT_SCHEDULE, nullable=False)
+    violation_count = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

@@ -29,10 +29,9 @@ export class Http {
     const serverUrl = baseUrl
       ? baseUrl
       : API_URL;
-    console.log("Server URL: ", serverUrl, baseUrl);
 
-    this.token = getAccessTokenFromLS();
-    this.refreshToken = getRefreshTokenFromLS();
+    this.token = getAccessTokenFromLS() || "";
+    this.refreshToken = getRefreshTokenFromLS() || "";
     this.instance = axios.create({
       baseURL: `${serverUrl}/api`,
       timeout: 10000,
@@ -44,9 +43,24 @@ export class Http {
     });
     this.instance.interceptors.request.use(
       (config) => {
+        // Priority: Get token from auth_state (new system)
+        try {
+          const authStateStr = localStorage.getItem('auth_state');
+          if (authStateStr) {
+            const authState = JSON.parse(authStateStr);
+            const token = authState.token;
+            if (token && config.headers) {
+              config.headers.Authorization = `Bearer ${token}`;
+              return config;
+            }
+          }
+        } catch (error) {
+          console.log('Error parsing auth_state:', error);
+        }
+        
+        // Fallback: Use old token method for backward compatibility
         if (this.token && config.headers) {
-          config.headers.authorization = `Bearer ${this.token}`;
-          return config;
+          config.headers.Authorization = `Bearer ${this.token}`;
         }
         return config;
       },
@@ -58,18 +72,9 @@ export class Http {
     this.instance.interceptors.response.use(
       (response) => {
         const { url } = response.config;
-        console.log({ url });
-        if (url === URL_LOGIN || url === URL_SIGNUP) {
-          const data = response.data as AuthResponse;
-          this.token = data.accessToken.accessToken;
-          this.refreshToken = data.accessToken.refreshToken;
-          setAccessTokenToLS(this.token);
-          setRefreshTokenToLS(this.refreshToken);
-        } else if (url === URL_LOGOUT) {
-          this.token = "";
-          this.refreshToken = "";
-          clearLS();
-        } else if (url === URL_SESSION_ACCESS_TOKEN) {
+        
+        // Simplified response handling - let authService handle auth state
+        if (url === URL_SESSION_ACCESS_TOKEN) {
           const data = response.data;
           this.token = data.access_token;
           setAccessTokenToLS(this.token);
@@ -100,65 +105,28 @@ export class Http {
             ErrorResponse<{ name: string; message: string }>
           >(error)
         ) {
-          // const config = error.response?.config;
-          // If Token is expired and that request does not belong to the request refresh token
-          // we will call refresh token
-          // if (
-          //   isAxiosExpiredTokenError(error) &&
-          //   config?.url !== URL_REFRESH_TOKEN
-          // ) {
-          //   // Try not to call handleRefreshToken twice
-          //   this.refreshTokenRequest = this.refreshTokenRequest
-          //     ? this.refreshTokenRequest
-          //     : this.handleRefreshToken().finally(() => {
-          //         setTimeout(() => {
-          //           this.refreshTokenRequest = null;
-          //         }, 10000);
-          //       });
-          //   return this.refreshTokenRequest.then((token) => {
-          //     return this.instance({
-          //       ...config,
-          //       headers: { ...config?.headers, authorization: token },
-          //     });
-          //   });
-          // }
-
-          // If token is not correct or is not passed or expired but failed to call the refresh token
-          // we will clear the local storage and toast
-
+          // Clear auth data and let authService handle logout
+          
+          // Clear old storage
           clearLS();
           this.token = "";
           this.refreshToken = "";
+          
+          // Clear new storage and trigger auth change
+          localStorage.removeItem('auth_state');
+          window.dispatchEvent(new Event('auth-change'));
+          
           console.log(
-            `Error ${
+            `Unauthorized error: ${
               error.response?.data.data?.message || error.response?.data.message
             }`
           );
-          // window.location.reload()
         }
         return Promise.reject(error);
       }
     );
   }
 
-  // private handleRefreshToken() {
-  //   return this.instance
-  //     .post<RefreshTokenResponse>(URL_REFRESH_TOKEN, {
-  //       refresh_token: this.refreshToken,
-  //     })
-  //     .then((res) => {
-  //       const { token } = res.data.data;
-  //       setAccessTokenToLS(token);
-  //       this.token = token;
-  //       return token;
-  //     })
-  //     .catch((error) => {
-  //       clearLS();
-  //       this.token = "";
-  //       this.refreshToken = "";
-  //       throw error;
-  //     });
-  // }
 }
 
 const request = new Http().instance;

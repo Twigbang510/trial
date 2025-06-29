@@ -35,7 +35,6 @@ export const SignUp = () => {
       return;
     }
     try {
-      console.log("form", form);
       await authApi.registerAccount({
         email: form.email,
         password: form.password,

@@ -139,3 +139,80 @@ backend/
 3. Create CRUD operations in `app/crud/`
 4. Create API endpoints in `app/api/v1/`
 5. Update `app/main.py` to include new routers
+
+## 🛡️ Content Moderation System
+
+The backend includes a comprehensive content moderation system with multiple approaches:
+
+### Quick Setup
+```bash
+# All-in-one setup
+python moderation_manager.py setup
+
+# Check configuration
+python moderation_manager.py config
+
+# Run tests
+python moderation_manager.py test
+```
+
+### Moderation Methods
+
+| Method | Accuracy | Speed | Offline | Vietnamese |
+|--------|----------|-------|---------|------------|
+| **Gemini** 🏆 | 100% | Fast | ❌ | ✅ Excellent |
+| **Local Models** 🔒 | 69% | Medium | ✅ | ✅ Good |
+| **Keywords** ⚡ | 85% | Very Fast | ✅ | ✅ Good |
+| **OpenAI** 🔄 | 69% | Fast | ❌ | ❌ Limited |
+
+### Configuration
+
+**Recommended (Gemini):**
+```bash
+export GEMINI_API_KEY=your_gemini_key
+export MODERATION_METHOD=gemini
+```
+
+**Privacy-focused (Local):**
+```bash
+export MODERATION_METHOD=local
+python setup_local_models.py --setup recommended
+```
+
+**Fast fallback (Keywords):**
+```bash
+export MODERATION_METHOD=keywords
+```
+
+### Management Commands
+```bash
+# Setup system
+python moderation_manager.py setup
+
+# Check status
+python moderation_manager.py status
+
+# Run comprehensive tests
+python moderation_manager.py test
+
+# View configuration
+python moderation_manager.py config
+```
+
+### Environment Variables
+```env
+# Moderation Configuration
+MODERATION_METHOD=gemini                    # auto|gemini|local|keywords|openai
+MODERATION_HARMFUL_THRESHOLD=0.7           # 0.0-1.0
+GEMINI_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_key             # Optional
+```
+
+### Testing
+```bash
+# Test all methods
+python test_moderation.py
+
+# Test specific method
+MODERATION_METHOD=gemini python test_moderation.py
+```

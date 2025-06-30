@@ -5,16 +5,16 @@ export interface User {
   full_name?: string;
   is_active: boolean;
   is_verified: boolean;
-  status: "Not Schedule" | "Processing" | "Scheduled";
+  status: "PENDING" | "PROCESSING" | "SCHEDULED";
   violation_count: number;
   created_at: string;
   updated_at?: string;
 }
 
 export interface UserStatus {
-  NOT_SCHEDULE: "Not Schedule";
-  PROCESSING: "Processing";
-  SCHEDULED: "Scheduled";
+  PENDING: "PENDING";
+  PROCESSING: "PROCESSING";
+  SCHEDULED: "SCHEDULED";
 }
 
 export interface LoginCredentials {
@@ -37,7 +37,7 @@ export interface AuthState {
 export interface UserUpdate {
   username?: string;
   full_name?: string;
-  status?: "Not Schedule" | "Processing" | "Scheduled";
+  status?: "PENDING" | "PROCESSING" | "SCHEDULED";
 }
 
 export interface UserType {
@@ -47,7 +47,7 @@ export interface UserType {
   fullName?: string;
   isActive?: boolean;
   isVerified?: boolean;
-  status?: "Not Schedule" | "Processing" | "Scheduled";
+  status?: "PENDING" | "PROCESSING" | "SCHEDULED";
   createdAt?: string;
   updatedAt?: string;
 }

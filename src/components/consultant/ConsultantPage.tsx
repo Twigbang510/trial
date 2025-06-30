@@ -18,7 +18,7 @@ export const ConsultantPage = () => {
   } = useChatTabs();
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
-  const canCreateNewChat = user?.status === "Not Schedule";
+  const canCreateNewChat = user?.status === "PENDING";
 
   const handleConversationChange = (conversationId: number) => {
     // Load conversation messages or handle conversation updates

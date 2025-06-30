@@ -4,9 +4,9 @@ from datetime import datetime
 from enum import Enum
 
 class UserStatus(str, Enum):
-    NOT_SCHEDULE = "Not Schedule"
-    PROCESSING = "Processing"
-    SCHEDULED = "Scheduled"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    SCHEDULED = "SCHEDULED"
 
 # Shared properties
 class UserBase(BaseModel):
@@ -15,7 +15,7 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     is_active: Optional[bool] = True
     is_verified: Optional[bool] = False
-    status: Optional[UserStatus] = UserStatus.NOT_SCHEDULE
+    status: Optional[UserStatus] = UserStatus.PENDING
     violation_count: Optional[int] = 0
 
 # Properties to receive via API on creation

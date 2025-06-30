@@ -24,11 +24,11 @@ const AccountSuspended: React.FC<AccountSuspendedProps> = ({ user }) => {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Username:</span>
-                <span className="font-medium">{user.username || 'N/A'}</span>
+                <span className="font-medium text-red-600">{user.username || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Email:</span>
-                <span className="font-medium">{user.email}</span>
+                <span className="font-medium text-red-600">{user.email}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Account Status:</span>

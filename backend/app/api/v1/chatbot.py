@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.core.gemini import chat_with_gemini, format_conversation_history
 from app.core.moderation import moderate_content
+from app.core.chat_history import ChatHistoryManager
 from app.crud.crud_conversation import conversation, message
 from app.crud.crud_user import user_crud
 from app.schemas.conversation import ConversationCreate, MessageCreate
@@ -132,13 +133,48 @@ async def chat_with_ai(
         )
         message.create(db, obj_in=user_message, conversation_id=conv.id)
 
-        # Get conversation history for AI
+        # Get conversation history for AI and chat analysis
         db_messages = message.get_by_conversation(db, conversation_id=conv.id)
+        
+        # Analyze conversation history (excluding current user message)
+        historical_messages = db_messages[:-1] if db_messages else []
+        history_analysis = ChatHistoryManager.analyze_conversation_history(historical_messages)
+        
+        future_bot_count = conv.bot_response_count + 1
+        if ChatHistoryManager.should_stop_conversation(conv, future_bot_count):
+            # Update conversation status to abandoned if not already
+            if conv.booking_status != "abandoned":
+                conv.booking_status = "abandoned"
+                conversation.update(db, db_obj=conv, obj_in={"booking_status": "abandoned"})
+            
+            # Return stop message
+            stop_message = ChatHistoryManager.get_stop_message()
+            
+            # Save the stop message as bot response
+            bot_message = MessageCreate(
+                content=stop_message,
+                sender="bot",
+                is_appropriate=True
+            )
+            message.create(db, obj_in=bot_message, conversation_id=conv.id)
+            
+            return ChatResponse(
+                response=stop_message,
+                conversation_id=conv.id,
+                is_appropriate=True,
+                moderation_action="CLEAN"
+            )
+        
+        # Update conversation status based on user message
+        conversation_history_str = ChatHistoryManager.convert_messages_to_history_string(historical_messages)
+        ChatHistoryManager.update_conversation_status(db, conv, request.message, conversation_history_str)
+        
+        # Format conversation history for AI
         conversation_history = [
             {"content": msg.content, "sender": msg.sender}
-            for msg in db_messages[:-1]  # Exclude the current user message
+            for msg in historical_messages
         ]
-
+        
         # Get response from Gemini
         formatted_history = format_conversation_history(conversation_history)
         ai_response = chat_with_gemini(request.message, formatted_history, request.context)
@@ -150,6 +186,9 @@ async def chat_with_ai(
             is_appropriate=True
         )
         message.create(db, obj_in=bot_message, conversation_id=conv.id)
+        
+        # Increment bot response count after generating response
+        ChatHistoryManager.increment_bot_response_count(db, conv)
 
         # Update conversation title if it's the first message
         if not conv.title and len(db_messages) <= 2:  # User message + AI response

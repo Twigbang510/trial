@@ -10,7 +10,9 @@ class CRUDConversation:
         db_obj = Conversation(
             user_id=obj_in.user_id,
             title=obj_in.title,
-            context=obj_in.context
+            context=obj_in.context,
+            bot_response_count=obj_in.bot_response_count,
+            booking_status=obj_in.booking_status
         )
         db.add(db_obj)
         db.commit()
@@ -41,6 +43,8 @@ class CRUDConversation:
                 'id': conv.id,
                 'title': conv.title,
                 'context': conv.context,
+                'bot_response_count': conv.bot_response_count,
+                'booking_status': conv.booking_status,
                 'created_at': conv.created_at,
                 'updated_at': conv.updated_at,
                 'message_count': msg_count,

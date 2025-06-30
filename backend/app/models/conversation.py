@@ -10,6 +10,8 @@ class Conversation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Nullable for anonymous users
     title = Column(String(255), nullable=True)  # Auto-generated title from first message
     context = Column(String(50), default="consultant")  # consultant, booking, etc.
+    bot_response_count = Column(Integer, default=0)  # Track number of bot responses
+    booking_status = Column(String(20), default="ongoing")  # ongoing, completed, abandoned
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

@@ -21,31 +21,47 @@ class Message(MessageBase):
 class ConversationBase(BaseModel):
     title: Optional[str] = None
     context: str = "consultant"
+    bot_response_count: int = 0
+    booking_status: str = "ongoing"
 
 class ConversationCreate(ConversationBase):
     user_id: Optional[int] = None
 
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
+    context: Optional[str] = None
+    bot_response_count: Optional[int] = None
+    booking_status: Optional[str] = None
 
-class Conversation(ConversationBase):
+class ConversationInDB(ConversationBase):
     id: int
-    user_id: Optional[int]
+    user_id: Optional[int] = None
     created_at: datetime
-    updated_at: Optional[datetime]
-    messages: List[Message] = []
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
-class ConversationList(BaseModel):
+class Conversation(ConversationInDB):
+    pass
+
+# Response schemas for API
+class ConversationResponse(BaseModel):
     id: int
-    title: Optional[str]
+    title: Optional[str] = None
     context: str
+    bot_response_count: int
+    booking_status: str
     created_at: datetime
-    updated_at: Optional[datetime]
-    message_count: int
-    last_message: Optional[str]
+    updated_at: Optional[datetime] = None
+    message_count: Optional[int] = None  # For list views
+    last_message: Optional[str] = None   # For list views
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+class ConversationListResponse(BaseModel):
+    conversations: List[ConversationResponse]
+    total: int
+    skip: int
+    limit: int 

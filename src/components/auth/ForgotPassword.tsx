@@ -18,7 +18,7 @@ export const ForgotPassword = () => {
     setSuccess('');
     setIsLoading(true);
     try {
-      await authApi.forgotPassword(email);
+      await authApi.forgotPassword({ email });
       // Lưu email để dùng ở trang verification
       localStorage.setItem('reset_email', email);
       setSuccess('Verification code sent to your email.');

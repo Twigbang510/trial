@@ -12,15 +12,16 @@ def generate_verification_code():
     """Generate 6 random numbers"""
     return ''.join(random.choices(string.digits, k=6))
 
-def send_verification_email(email: str, code: str):
+def send_verification_email(email: str, code: str, is_reset: bool = False):
     """Send email with verification code"""
     try:
         msg = MIMEMultipart()
         msg['From'] = settings.FROM_EMAIL
         msg['To'] = email
-        msg['Subject'] = "Password Reset Verification Code"
         
-        body = f"""
+        if is_reset:
+            msg['Subject'] = "Password Reset Verification Code"
+            body = f"""
         Hello,
         
         Your password reset verification code is: {code}
@@ -28,6 +29,20 @@ def send_verification_email(email: str, code: str):
         This code will expire in 10 minutes.
         
         If you didn't request this, please ignore this email.
+        
+        Best regards,
+        Trial Webapp Team
+        """
+        else:
+            msg['Subject'] = "Email Verification Code"
+            body = f"""
+        Hello,
+        
+        Your email verification code is: {code}
+        
+        This code will expire in 10 minutes.
+        
+        Please enter this code to verify your account.
         
         Best regards,
         Trial Webapp Team

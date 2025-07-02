@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/auth';
-import { User, UserUpdate } from '@/types/user.type';
+import { User } from '@/types/user.type';
 
 export const useAuth = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -70,7 +70,7 @@ export const useAuth = () => {
     }
   }, []);
 
-  const updateUserStatus = useCallback(async (status: "Not Schedule" | "Processing" | "Scheduled") => {
+  const updateUserStatus = useCallback(async (status: "PENDING" | "PROCESSING" | "SCHEDULED") => {
     try {
       const updatedUser = await authService.updateUser({ status });
       if (updatedUser) {

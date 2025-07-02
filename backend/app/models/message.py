@@ -14,4 +14,5 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    conversation = relationship("Conversation", back_populates="messages") 
+    conversation = relationship("Conversation", back_populates="messages")
+    booking_analysis = relationship("BookingAnalysis", back_populates="message", uselist=False, cascade="all, delete-orphan") 

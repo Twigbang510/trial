@@ -3,12 +3,21 @@ import { Mic, Paperclip, ArrowRight, User, Bot } from 'lucide-react';
 import { content } from '@/constants/content';
 import { motion, AnimatePresence } from 'framer-motion';
 import chatbotApi from '@/lib/api/chatbot.api';
+import BookingOptions from '@/components/BookingOptions';
+import ConfirmationButtons from '@/components/ConfirmationButtons';
+import { BookingOption } from '@/types/conversation.type';
 
 interface Message {
   id: string;
   content: string;
   sender: 'user' | 'bot';
   timestamp: Date;
+  bookingOptions?: BookingOption[];
+  warningMessage?: string;
+  awaitingConfirmation?: {
+    option: BookingOption;
+    confirmationText: string;
+  };
 }
 
 interface ChatWindowProps {
@@ -64,6 +73,9 @@ const ChatWindow = ({ activeTab, onConversationChange }: ChatWindowProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('=== CHAT SUBMIT DEBUG ===');
+    console.log('Message:', message);
+    
     // Clear previous validation error
     setValidationError('');
     
@@ -88,16 +100,26 @@ const ChatWindow = ({ activeTab, onConversationChange }: ChatWindowProps) => {
     setIsLoading(true);
 
     try {
-      // Get response from Gemini with conversation storage
+      // Get enhanced response with booking options
       const response = await chatbotApi.chat(message.trim(), currentConversationId, 'consultant');
       
-      // Add bot response
+      // Debug: Log the response to check booking_options
+      console.log('Chat response:', response);
+      console.log('Booking options received:', response.booking_options);
+      
+      // Add bot response with booking options
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.response,
         sender: 'bot',
         timestamp: new Date(),
+        bookingOptions: response.booking_options || [],
+        warningMessage: response.warning_message
       };
+      console.log('=== BOT MESSAGE CREATED ===');
+      console.log('Bot message:', botMessage);
+      console.log('Bot message bookingOptions:', botMessage.bookingOptions);
+      console.log('Bot message bookingOptions length:', botMessage.bookingOptions?.length);
       setMessages(prev => [...prev, botMessage]);
 
       // Update conversation ID if this is a new conversation
@@ -106,6 +128,7 @@ const ChatWindow = ({ activeTab, onConversationChange }: ChatWindowProps) => {
         onConversationChange?.(response.conversation_id);
       }
     } catch (error) {
+      console.error('=== CHAT API ERROR ===');
       console.error('Error getting bot response:', error);
       // Add error message
       const errorMessage: Message = {
@@ -118,6 +141,82 @@ const ChatWindow = ({ activeTab, onConversationChange }: ChatWindowProps) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleBookingOptionSelect = (option: BookingOption) => {
+    // Create confirmation message from bot
+    const confirmationText = `Do you want to confirm booking with **${option.lecturer_name}** on **${option.date}** at **${option.time}** for **${option.subject}**?\n\n📍 **Location:** ${option.location}\n⏱️ **Duration:** ${option.duration_minutes} minutes`;
+    
+    const confirmationMessage: Message = {
+      id: Date.now().toString(),
+      content: confirmationText,
+      sender: 'bot',
+      timestamp: new Date(),
+      awaitingConfirmation: {
+        option,
+        confirmationText
+      }
+    };
+    
+    setMessages(prev => [...prev, confirmationMessage]);
+  };
+
+  const handleConfirmBooking = async (option: BookingOption) => {
+    // Add user's "Yes" response
+    const userYesMessage: Message = {
+      id: Date.now().toString(),
+      content: "Yes",
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, userYesMessage]);
+    setIsLoading(true);
+
+    try {
+      // Send confirmation to backend
+      const confirmationMessage = `Yes, I confirm booking with ${option.lecturer_name} on ${option.date} at ${option.time} for ${option.subject}.`;
+      const response = await chatbotApi.chat(confirmationMessage, currentConversationId, 'consultant');
+      
+      // Add success response
+      const successMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response.response || `✅ Great! Your booking with ${option.lecturer_name} on ${option.date} at ${option.time} for ${option.subject} has been confirmed. You will receive an email confirmation soon.`,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, successMessage]);
+    } catch (error) {
+      console.error('Error confirming booking:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, there was an error confirming your booking. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelBooking = () => {
+    // Add user's "No" response
+    const userNoMessage: Message = {
+      id: Date.now().toString(),
+      content: "No",
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    
+    // Add bot's response to continue
+    const continueMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      content: "No problem! I can help you find another time or answer any more questions about booking. Do you need any more help?",
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+    
+    setMessages(prev => [...prev, userNoMessage, continueMessage]);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,186 +297,233 @@ const ChatWindow = ({ activeTab, onConversationChange }: ChatWindowProps) => {
                     />
                   </motion.div>
 
-                  {/* Holland Test */}
-                  <motion.div
+                  {/* Holland Code Test */}
+                  <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="w-full"
+                    transition={{ delay: 0.4 }}
+                    className="mb-6"
                   >
-                    <h3 className="text-sm md:text-base font-semibold text-[#332288] mb-4">Holland Test*</h3>
-                    <div className="flex flex-row gap-4 flex-wrap">
-                      {Object.entries(hollandResults).map(([type, value], index) => (
-                        <motion.div 
-                          key={type} 
-                          className="relative"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4 + index * 0.1 }}
-                        >
-                          <span className="absolute -top-2 left-2 bg-white px-1 text-xs text-[#332288]">
-                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                          </span>
+                    <h3 className="text-sm md:text-base font-semibold text-[#332288] mb-2">Holland Code Test*</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { key: 'realistic', label: 'Realistic' },
+                        { key: 'investigative', label: 'Investigative' },
+                        { key: 'artistic', label: 'Artistic' },
+                        { key: 'social', label: 'Social' },
+                        { key: 'enterprising', label: 'Enterprising' },
+                        { key: 'conventional', label: 'Conventional' }
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex flex-col">
+                          <label className="text-xs text-[#332288] mb-1">{label}</label>
                           <input
                             type="text"
-                            value={value}
-                            onChange={(e) => handleHollandChange(type as keyof typeof hollandResults, e.target.value)}
-                            placeholder={`Input your score`}
-                            className="w-[150px] px-3 py-2 border border-[#332288] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#332288] bg-white text-black text-sm md:text-base"
+                            value={hollandResults[key as keyof typeof hollandResults]}
+                            onChange={(e) => handleHollandChange(key as keyof typeof hollandResults, e.target.value)}
+                            placeholder="Score"
+                            className="px-2 py-1 border border-[#332288] rounded focus:outline-none focus:ring-1 focus:ring-[#332288] bg-white text-black text-xs md:text-sm"
                           />
-                        </motion.div>
+                        </div>
                       ))}
                     </div>
                   </motion.div>
+
+                  {/* Submit Button */}
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                    onClick={handleHollandSubmit}
+                    className="w-full py-2 px-4 bg-[#332288] text-white rounded-lg hover:bg-[#2a1a70] transition-colors text-sm md:text-base"
+                  >
+                    Submit Test Results
+                  </motion.button>
                 </div>
               </div>
             </motion.div>
 
-            <AnimatePresence>
-              {/* Submit Button */}
-              {!hollandSubmit && mbtiResult.trim() !== '' && Object.values(hollandResults).every(value => value.trim() !== '') && (
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex-1 w-full"
-                >
-                  <button
-                    type="button"
-                    className="ml-[calc(8px+2rem)] md:ml-[calc(16px+2.5rem)] px-8 py-3 bg-[#332288] rounded-xl text-white hover:text-gray-200 transition-all duration-300 hover:bg-[#332288]/80 hover:cursor-pointer hover:shadow-lg hover:bg-white hover:text-[#332288] hover:border hover:border-[#332288]"
-                    onClick={handleHollandSubmit} 
-                  >
-                    Submit
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Bot's response */}
-            <AnimatePresence>
-              {hollandSubmit && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center w-full"
-                >
-                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
-                    <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
-                  </div>    
-                  <div className="flex-1 flex justify-start pl-2 md:pl-4">
-                    <div className="w-[85%] md:w-[80%] rounded-lg p-4 border-2 border-[#332288] bg-white">
-                      <p className="text-xs md:text-sm text-[#332288]">{content}</p>
+            {/* Results Display */}
+            {hollandSubmit && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="flex items-center w-full mt-4"
+              >
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
+                  <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
+                </div>
+                <div className="flex-1 flex justify-start pl-2 md:pl-4">
+                  <div className="w-[85%] md:w-[80%] rounded-lg p-3 md:p-4 border-2 border-[#332288] bg-white">
+                    <div className="text-xs md:text-sm text-[#332288] whitespace-pre-line">
+                      {content}
                     </div>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
+                </div>
+              </motion.div>
+            )}
           </div>
-
         </div>
-
       </div>
     );
   }
 
+  // Default new-chat tab
   return (
     <div className="flex-1 flex flex-col border-2 border-[#332288] rounded-lg mb-4 h-[calc(100vh-200px)]">
       {/* Messages Area */}
       <div className="flex-1 p-2 md:p-4 overflow-y-auto">
-        <div className="flex flex-col items-center space-y-3 md:space-y-4">
+        <AnimatePresence>
           {messages.map((msg) => (
-            <div
+            <motion.div
               key={msg.id}
-              className="flex items-center w-full"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className={`flex items-start mb-4 ${
+                msg.sender === 'user' ? 'justify-end' : 'justify-start'
+              }`}
             >
-              {msg.sender === 'bot' && (
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
-                  <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
+              <div className={`flex items-start max-w-[85%] md:max-w-[80%] ${
+                msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'
+              }`}>
+                {/* Avatar */}
+                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center ${
+                  msg.sender === 'user' 
+                    ? 'bg-blue-500 ml-2 md:ml-4' 
+                    : 'bg-[#332288] mr-2 md:mr-4'
+                }`}>
+                  {msg.sender === 'user' ? (
+                    <User className="w-4 h-4 md:w-6 md:h-6 text-white" />
+                  ) : (
+                    <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
+                  )}
                 </div>
-              )}
-              <div className={`flex-1 flex ${msg.sender === 'user' ? 'justify-end pr-2 md:pr-4' : 'justify-start pl-2 md:pl-4'}`}>
-                <div className={`w-[85%] md:w-[80%] rounded-lg p-3 md:p-4 border-2 border-[#332288] bg-white break-words whitespace-pre-wrap`}>
-                  <p className="text-xs md:text-sm text-[#332288]">{msg.content}</p>
-                </div>
-              </div>
-              {msg.sender === 'user' && (
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
-                  <User className="w-4 h-4 md:w-6 md:h-6 text-white" />
-                </div>
-              )}
-            </div>
-          ))}
-        
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="flex items-center w-full">
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center">
-                <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
-              </div>
-              <div className="flex-1 flex justify-start pl-2 md:pl-4">
-                <div className="w-[85%] md:w-[80%] rounded-lg p-3 md:p-4 border-2 border-[#332288] bg-white">
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#332288]"></div>
-                    <p className="text-xs md:text-sm text-[#332288]">AI is thinking...</p>
+
+                {/* Message Content */}
+                <div className="flex-1">
+                  <div className={`rounded-lg p-3 md:p-4 ${
+                    msg.sender === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : 'border-2 border-[#332288] bg-white text-[#332288]'
+                  }`}>
+                                      <p className="text-xs md:text-sm whitespace-pre-wrap">{msg.content}</p>
+                  
+                  {/* Debug booking options */}
+                  {(() => {
+                    console.log('=== RENDER CHECK ===', {
+                      msgId: msg.id,
+                      hasBookingOptions: !!msg.bookingOptions,
+                      bookingOptionsLength: msg.bookingOptions?.length,
+                      bookingOptions: msg.bookingOptions
+                    });
+                    return null;
+                  })()}
+                  
+                  {msg.bookingOptions && msg.bookingOptions.length > 0 && (() => {
+                    console.log('✅ RENDERING BookingOptions with:', msg.bookingOptions);
+                    return <BookingOptions options={msg.bookingOptions} onOptionSelect={handleBookingOptionSelect} />;
+                  })()}
                   </div>
+
+                  {/* Warning Message */}
+                  {msg.warningMessage && (
+                    <div className="mt-2 p-2 bg-yellow-100 border border-yellow-400 rounded-lg">
+                      <p className="text-xs text-yellow-800">{msg.warningMessage}</p>
+                    </div>
+                  )}
+
+                  {/* Confirmation Buttons */}
+                  {msg.awaitingConfirmation && (
+                    <div className="mt-4 flex justify-center">
+                      <ConfirmationButtons
+                        onConfirm={() => handleConfirmBooking(msg.awaitingConfirmation!.option)}
+                        onCancel={handleCancelBooking}
+                        confirmText="Yes"
+                        cancelText="No"
+                      />
+                    </div>
+                  )}
+
+                  {/* Timestamp */}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {/* Loading indicator */}
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-start justify-start mb-4"
+          >
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#332288] flex items-center justify-center mr-2 md:mr-4">
+              <Bot className="w-4 h-4 md:w-6 md:h-6 text-white" />
             </div>
-          )}
-        </div>
+            <div className="rounded-lg p-3 md:p-4 border-2 border-[#332288] bg-white">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-[#332288] rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-[#332288] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-[#332288] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSubmit} className="p-2 md:p-4">   
-        <div className="w-full h-16 md:h-20 bg-opacity-30 bg-[#8C8C8C] rounded-full flex items-center gap-1 md:gap-2 p-1 md:px-2">
-          {/* File Upload Button */}
-          <button
-            type="button"
-            className="p-1 md:p-2 text-white hover:text-gray-200 transition-colors bg-[#332288] rounded-full"
-          >
-            <Paperclip className="w-4 h-4 md:w-5 md:h-5" />
-          </button>
-
-          {/* Message Input */}
-          <input
-            type="text"
-            value={message}
-            onChange={handleInputChange}
-            placeholder="Type your prompt here"
-            className="flex-1 px-2 md:px-4 py-1 md:py-2 bg-transparent text-[#424242] placeholder-[#424242] focus:outline-none text-sm md:text-base"
-            disabled={isLoading}
-          />
-
-          {/* Voice Input Button */}
-          <button
-            type="button"
-            className="p-1 md:p-2 text-[#424242] hover:text-gray-200 transition-colors"
-            disabled={isLoading}
-          >
-            <Mic className="w-4 h-4 md:w-5 md:h-5" />
-          </button>
-
-          {/* Send Button */}
-          <button
-            type="submit"
-            className="p-2 md:p-4 border-2 bg-[#332288] rounded-full text-white hover:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isLoading || !message.trim()}
-          >
-            <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-white" />   
-          </button>
-        </div>
-        
-        {/* Validation Error */}
+      <div className="border-t-2 border-[#332288] p-2 md:p-4">
         {validationError && (
-          <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-xs text-red-600">{validationError}</p>
+          <div className="mb-2 p-2 bg-red-100 border border-red-400 rounded-lg">
+            <p className="text-xs text-red-800">{validationError}</p>
           </div>
         )}
-      </form>
+        
+        <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={message}
+              onChange={handleInputChange}
+              placeholder="Ask me anything about your career..."
+              className="w-full px-3 md:px-4 py-2 md:py-3 border-2 border-[#332288] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#332288] text-xs md:text-sm"
+              disabled={isLoading}
+            />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              className="p-2 text-[#332288] hover:bg-[#332288] hover:text-white rounded-lg transition-colors"
+              disabled={isLoading}
+            >
+              <Paperclip className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            
+            <button
+              type="button"
+              className="p-2 text-[#332288] hover:bg-[#332288] hover:text-white rounded-lg transition-colors"
+              disabled={isLoading}
+            >
+              <Mic className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            
+            <button
+              type="submit"
+              disabled={isLoading || !message.trim()}
+              className="p-2 bg-[#332288] text-white rounded-lg hover:bg-[#2a1a70] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

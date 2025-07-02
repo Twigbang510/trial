@@ -47,12 +47,12 @@ def chat_with_gemini(message: str, conversation_history: list = None, context: s
                 history=conversation_history,
             )
             response = chat.send_message(message)
+            return str(response.text)
         else:
             # Generate single response with system prompt
             full_prompt = f"{system_prompt}\n\nUser: {message}"
             response = model.generate_content(full_prompt)
-        
-        return response.text
+            return str(response.text)
 
     except Exception as e:
         print(f"Error calling Gemini API: {e}")

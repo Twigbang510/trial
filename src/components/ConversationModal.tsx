@@ -47,10 +47,10 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     setMessages([...messages, newMessage]);
     setIsLoading(true);
 
-    const { content } = await chatbotApi.chat(inputValue, clientId!);
+    const response = await chatbotApi.chat(inputValue, undefined, 'consultant');
 
     const botResponse: Message = {
-      text: content,
+      text: response.response,
       isBot: true,
       timestamp: new Date(),
     };
@@ -61,13 +61,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
 
   const getClientId = useCallback(async () => {
     if (clientId) return;
-
-    const id = await chatbotApi.getClientId();
-    if (!id) {
-      console.error("Failed to get client ID");
-      return;
-    }
-
+    // Generate a simple client ID for this session
+    const id = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     setClientId(id);
   }, [clientId]);
 
@@ -90,6 +85,9 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       onDismiss={onClose}
       snapPoints={({ maxHeight }) => [maxHeight * 0.7, maxHeight * 0.9]}
       blocking={false}
+      placeholder={<div className="h-16" />}
+      onPointerEnterCapture={() => {}}
+      onPointerLeaveCapture={() => {}}
     >
       <div className={cn("flex flex-col relative ")}>
         <div className="fixed top-4 left-0 right-0 z-10 px-5 py-4 border-b flex items-center space-x-2 bg-gradient-to-r from-green-100 to-green-50">

@@ -17,4 +17,5 @@ class Conversation(Base):
     
     # Relationships
     user = relationship("User", back_populates="conversations")
-    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan") 
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+    booking_analyses = relationship("BookingAnalysis", back_populates="conversation", cascade="all, delete-orphan") 

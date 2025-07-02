@@ -51,7 +51,7 @@ export const EmailVerification = () => {
         return;
       }
 
-      await authApi.verifyCode(email, verificationCode);
+      await authApi.verifyCode({ email, code: verificationCode });
       navigate({ to: '/auth/reset-password' });
     } catch (err: any) {
       const detail = err?.response?.data?.detail;

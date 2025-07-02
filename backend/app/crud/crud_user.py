@@ -65,10 +65,10 @@ class CRUDUser:
         return user
 
     def is_active(self, user: User) -> bool:
-        return user.is_active
+        return bool(user.is_active)
 
     def is_verified(self, user: User) -> bool:
-        return user.is_verified
+        return bool(user.is_verified)
     
     def increment_violation(self, db: Session, *, user: User, violation_type: str = "WARNING") -> User:
         """
@@ -82,11 +82,12 @@ class CRUDUser:
         Returns:
             Updated user object
         """
-        user.violation_count += 1
+        current_count = getattr(user, 'violation_count', 0) or 0
+        setattr(user, 'violation_count', current_count + 1)
         
         # Deactivate user if they have 5 or more violations
-        if user.violation_count >= 5:
-            user.is_active = False
+        if getattr(user, 'violation_count', 0) >= 5:
+            setattr(user, 'is_active', False)
             
         db.add(user)
         db.commit()
@@ -104,8 +105,8 @@ class CRUDUser:
         Returns:
             Updated user object
         """
-        user.violation_count = 0
-        user.is_active = True
+        setattr(user, 'violation_count', 0)
+        setattr(user, 'is_active', True)
         
         db.add(user)
         db.commit()

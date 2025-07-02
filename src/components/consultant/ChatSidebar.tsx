@@ -1,4 +1,4 @@
-import { MessageSquare, Compass, X, Plus, ChevronDown, ChevronRight, Menu } from 'lucide-react';
+import { MessageSquare, Compass, X, Plus, Menu } from 'lucide-react';
 import { ChatTab } from '@/types/conversation.type';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -1,5 +1,4 @@
 import axios from "axios";
-import request from "@/lib/http";
 import { EStorageKey } from "@/constants/storage";
 import { LocalStorage } from "@/lib/services/local-storage";
 import { User, UserUpdate } from "@/types/user.type";

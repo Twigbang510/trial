@@ -6,10 +6,14 @@
 
 # NEW: Multiple moderation approaches
 import google.generativeai as genai
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from app.core.config import settings
 import logging
 import os
+import asyncio
+import time
+from app.core.moderation_local import  ModerationResult as LocalModerationResult
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +22,14 @@ logger = logging.getLogger(__name__)
 # client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
 # NEW: Configure Gemini for moderation
+model = None
 if settings.GEMINI_API_KEY:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-else:
-    gemini_model = None
+    try:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini: {e}")
+        model = None
 
 # NEW: Import local models if available
 try:
@@ -58,7 +65,7 @@ class ModerationResult:
             return "WARNING"
         return "CLEAN"
 
-def _convert_to_test_format(result: ModerationResult, method_used: str, detected_language: str = None) -> Dict[str, Any]:
+def _convert_to_test_format(result: ModerationResult, method_used: str, detected_language: Optional[str] = None) -> Dict[str, Any]:
     """Convert ModerationResult to test-compatible dictionary format"""
     return {
         "is_safe": not result.flagged,  # Invert: flagged=True means toxic, is_safe=False means toxic
@@ -71,7 +78,7 @@ def _convert_to_test_format(result: ModerationResult, method_used: str, detected
         "violation_type": result.violation_type
     }
 
-async def moderate_content(text: str, language: str = None) -> Dict[str, Any]:
+async def moderate_content(text: str, language: Optional[str] = None) -> Dict[str, Any]:
     """
     Main content moderation function with multiple approaches
     
@@ -119,7 +126,7 @@ async def moderate_content(text: str, language: str = None) -> Dict[str, Any]:
         
         if moderation_method == "gemini" or moderation_method == "auto":
             # Try Gemini moderation
-            if gemini_model and settings.GEMINI_API_KEY:
+            if model and settings.GEMINI_API_KEY:
                 try:
                     result = await _moderate_with_gemini(text)
                     logger.info(f"Gemini moderation successful - Type: {result.violation_type}")
@@ -172,7 +179,7 @@ Text to analyze: "{text}"
 Respond ONLY with valid JSON, no other text.
 """
         
-        response = gemini_model.generate_content(moderation_prompt)
+        response = model.generate_content(moderation_prompt)
         
         # Parse JSON response (handle markdown code blocks)
         import json

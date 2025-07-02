@@ -1,5 +1,5 @@
 import { API_URL } from "@/config/app";
-import { ChatApiResponse, ConversationApiResponse } from "@/types/conversation.type";
+import { ChatApiResponse, ConversationApiResponse, EnhancedChatApiResponse } from "@/types/conversation.type";
 
 const CHATBOT_API_URL = `${API_URL}/api/v1/chatbot`;
 
@@ -47,8 +47,12 @@ interface Conversation {
 }
 
 const chatbotApi = {
-  chat: async (message: string, conversationId?: number, context: string = 'consultant'): Promise<ChatApiResponse> => {
+  // Enhanced chat method with booking support
+  chat: async (message: string, conversationId?: number, context: string = 'consultant'): Promise<EnhancedChatApiResponse> => {
     try {
+      console.log('=== FRONTEND API CALL ===');
+      console.log('Request payload:', { message, conversation_id: conversationId, context });
+      
       const response = await fetch(`${CHATBOT_API_URL}/chat`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -59,6 +63,8 @@ const chatbotApi = {
         })
       });
       
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
         if (response.status === 403) {
           const errorData = await response.json();
@@ -67,7 +73,12 @@ const chatbotApi = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      return await response.json();
+      const responseData = await response.json();
+      console.log('=== FRONTEND API RESPONSE ===');
+      console.log('Full response:', responseData);
+      console.log('Booking options in response:', responseData.booking_options);
+      
+      return responseData;
     } catch (error) {
       console.error("Error in chatbot API:", error);
       
@@ -80,9 +91,24 @@ const chatbotApi = {
         response: "Sorry, I couldn't process your request. Please try again.",
         conversation_id: conversationId || 0,
         is_appropriate: false,
-        moderation_action: 'CLEAN'
+        moderation_action: 'CLEAN',
+        booking_options: [],
+        needs_availability_check: false,
+        suggested_next_action: 'provide_info'
       };
     }
+  },
+
+  // Legacy chat method for backward compatibility
+  chatLegacy: async (message: string, conversationId?: number, context: string = 'consultant'): Promise<ChatApiResponse> => {
+    const response = await chatbotApi.chat(message, conversationId, context);
+    return {
+      response: response.response,
+      conversation_id: response.conversation_id,
+      is_appropriate: response.is_appropriate,
+      moderation_action: response.moderation_action as 'CLEAN' | 'WARNING' | 'BLOCKED' | undefined,
+      warning_message: response.warning_message
+    };
   },
 
   getConversations: async (): Promise<Conversation[]> => {

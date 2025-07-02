@@ -101,11 +101,8 @@ class ChatHistoryManager:
         """
         # Check if booking is completed
         if ChatHistoryManager.detect_booking_completion(user_message, conversation_history):
-            conversation.booking_status = "completed"
-            logger.info(f"Conversation {conversation.id} marked as completed booking")
-        
-        # Update bot response count (will be incremented after AI response)
-        # This is updated in the main chat function
+            setattr(conversation, 'booking_status', 'completed')
+            logger.info(f"Conversation {getattr(conversation, 'id', None)} marked as completed booking")
         
         db.commit()
         db.refresh(conversation)
@@ -116,13 +113,13 @@ class ChatHistoryManager:
         """
         Increment bot response count after generating AI response
         """
-        conversation.bot_response_count += 1
+        setattr(conversation, 'bot_response_count', getattr(conversation, 'bot_response_count', 0) + 1)
         
         # Mark as abandoned if reached max without booking
-        if (conversation.bot_response_count >= ChatHistoryManager.MAX_BOT_RESPONSES and 
-            conversation.booking_status == "ongoing"):
-            conversation.booking_status = "abandoned"
-            logger.info(f"Conversation {conversation.id} marked as abandoned after {conversation.bot_response_count} responses")
+        if (getattr(conversation, 'bot_response_count', 0) >= ChatHistoryManager.MAX_BOT_RESPONSES and 
+            getattr(conversation, 'booking_status', None) == "ongoing"):
+            setattr(conversation, 'booking_status', 'abandoned')
+            logger.info(f"Conversation {getattr(conversation, 'id', None)} marked as abandoned after {getattr(conversation, 'bot_response_count', 0)} responses")
         
         db.commit()
         db.refresh(conversation)

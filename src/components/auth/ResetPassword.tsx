@@ -42,7 +42,7 @@ export const ResetPassword = () => {
         return;
       }
 
-      await authApi.resetPassword(email, form.newPassword);
+      await authApi.resetPassword({ email, code: '', new_password: form.newPassword });
       setSuccess('Password reset successfully!');
       // Xóa email khỏi localStorage
       localStorage.removeItem('reset_email');

@@ -38,11 +38,11 @@ def create_user(
     
     # Generate verification code
     verification_code = ''.join(random.choices(string.digits, k=6))
-    verification_codes[user.email] = verification_code
+    verification_codes[getattr(user, 'email')] = verification_code
     
     # Send verification email
     try:
-        send_verification_email(user.email, verification_code)
+        send_verification_email(getattr(user, 'email'), verification_code)
     except Exception as e:
         print(f"Failed to send verification email: {e}")
     
@@ -76,7 +76,7 @@ def login_for_access_token(
     
     return {
         "access_token": create_access_token(
-            data={"user_id": user.id}, expires_delta=access_token_expires
+            data={"user_id": getattr(user, 'id')}, expires_delta=access_token_expires
         ),
         "token_type": "bearer",
         "user": user_out,

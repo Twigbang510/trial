@@ -51,6 +51,18 @@ export interface ChatApiResponse {
   warning_message?: string;
 }
 
+export interface EnhancedChatApiResponse {
+  response: string;
+  conversation_id: number;
+  is_appropriate: boolean;
+  moderation_action?: 'CLEAN' | 'WARNING' | 'BLOCKED';
+  warning_message?: string;
+  booking_options: BookingOption[];
+  needs_availability_check: boolean;
+  suggested_next_action: string;
+  booking_analysis?: any;
+}
+
 export interface ConversationApiResponse {
   id: number;
   title: string;
@@ -64,4 +76,15 @@ export interface ConversationApiResponse {
     is_appropriate: boolean;
     created_at: string;
   }[];
+}
+
+export interface BookingOption {
+  type: string;  // "exact_match" hoặc "alternative"
+  lecturer_name: string;
+  date: string;  // YYYY-MM-DD
+  time: string;  // HH:MM
+  subject: string;
+  location: string;
+  duration_minutes: number;
+  availability_id: number;
 }

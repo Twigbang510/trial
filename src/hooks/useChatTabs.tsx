@@ -192,19 +192,27 @@ export const useChatTabs = () => {
   }, []);
 
   const updateTabConversationId = useCallback((tabId: string, conversationId: number) => {
-    setTabsState(prev => ({
-      ...prev,
-      tabs: prev.tabs.map(tab =>
-        tab.id === tabId 
-          ? { 
-              ...tab, 
-              conversationId,
-              id: `conv-${conversationId}`, // Update tab ID to match conversation
-              title: tab.title || `Chat ${conversationId}`
-            } 
-          : tab
-      )
-    }));
+    const newTabId = `conv-${conversationId}`;
+    
+    setTabsState(prev => {
+      const isActiveTab = prev.activeTabId === tabId;
+      
+      return {
+        ...prev,
+        activeTabId: isActiveTab ? newTabId : prev.activeTabId,
+        tabs: prev.tabs.map(tab =>
+          tab.id === tabId 
+            ? { 
+                ...tab, 
+                conversationId,
+                id: newTabId, 
+                title: tab.title || `Chat ${conversationId}`,
+                isActive: isActiveTab 
+              } 
+            : tab
+        )
+      };
+    });
   }, []);
 
   const updateTabBookingStatus = useCallback((tabId: string, bookingStatus: string) => {
@@ -219,7 +227,33 @@ export const useChatTabs = () => {
   }, []);
 
   const getActiveTab = useCallback(() => {
-    return tabsState.tabs.find(tab => tab.id === tabsState.activeTabId) || tabsState.tabs[0];
+    const activeTab = tabsState.tabs.find(tab => tab.id === tabsState.activeTabId);
+    
+    if (activeTab) {
+      return activeTab;
+    }
+    
+    const conversationTab = tabsState.tabs.find(tab => tab.type === 'conversation');
+    return conversationTab || tabsState.tabs[0];
+  }, [tabsState.tabs, tabsState.activeTabId]);
+
+  useEffect(() => {
+    const activeTab = tabsState.tabs.find(tab => tab.id === tabsState.activeTabId);
+    
+    if (!activeTab && tabsState.tabs.length > 0) {
+      const conversationTab = tabsState.tabs.find(tab => tab.type === 'conversation');
+      const fallbackTab = conversationTab || tabsState.tabs[0];
+      
+      console.warn('Invalid activeTabId detected, fixing to:', fallbackTab.id);
+      setTabsState(prev => ({
+        ...prev,
+        activeTabId: fallbackTab.id,
+        tabs: prev.tabs.map(tab => ({
+          ...tab,
+          isActive: tab.id === fallbackTab.id
+        }))
+      }));
+    }
   }, [tabsState.tabs, tabsState.activeTabId]);
 
   const getTabMessages = useCallback((tabId: string) => {

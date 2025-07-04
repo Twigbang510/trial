@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Mic, Paperclip, ArrowRight, User, Bot, MessageSquare, Send } from 'lucide-react';
+import { User, Bot, MessageSquare, Send } from 'lucide-react';
 import { motion } from 'framer-motion';
 import chatbotApi from '@/lib/api/chatbot.api';
 import { ChatTab, MessageType, BookingOption } from '@/types/conversation.type';

@@ -5,15 +5,16 @@ from sqlalchemy.orm import Session
 import re
 from datetime import datetime
 from app.core.gemini import chat_with_gemini, format_conversation_history
-from app.core.moderation import moderate_content
-from app.core.chat_history import ChatHistoryManager
 from app.core.booking_response_generator import booking_response_generator
 from app.crud.crud_conversation import conversation, message
-from app.crud.crud_user import user_crud
-from app.crud import booking_analysis, lecturer_availability
+from app.crud import booking_analysis
 from app.schemas.conversation import ConversationCreate, MessageCreate, EnhancedChatResponse, BookingOption, ConversationUpdate
 from app.api.deps import get_current_user_optional, get_db
 from app.models.user import User
+from app.services.user_service import UserService
+from app.services.booking_service import BookingService
+from app.services.conversation_service import ConversationService
+from app.services.moderation_service import ModerationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -57,13 +58,12 @@ async def confirm_booking(
     Direct booking confirmation endpoint - bypasses AI processing
     """
     try:
-        # Validate conversation exists and user has access
-        conv = conversation.get(db, id=request.conversation_id)
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+        # Get and validate conversation
+        conv = ConversationService.get_or_create_conversation(db, request.conversation_id, current_user)
+        ConversationService.validate_conversation_access(conv, current_user)
         
         # Check if conversation is already completed
-        if getattr(conv, 'booking_status') == 'complete':
+        if ConversationService.check_conversation_completed(conv):
             return EnhancedChatResponse(
                 response="❌ **This conversation has already been completed.** The booking has already been confirmed.\n\nIf you need to make a new appointment, please start a new conversation.",
                 conversation_id=request.conversation_id,
@@ -74,80 +74,39 @@ async def confirm_booking(
                 suggested_next_action="complete"
             )
         
-        if current_user and getattr(conv, 'user_id') and int(getattr(conv, 'user_id')) != int(getattr(current_user, 'id')):
-            raise HTTPException(status_code=403, detail="Access denied")
+        ConversationService.save_user_message(db, "Yes", request.conversation_id)
         
-        # Add user's "Yes" message
-        user_message = MessageCreate(
-            content="Yes",
-            sender="user",
-            is_appropriate=True
-        )
-        user_msg_obj = message.create(db, obj_in=user_message, conversation_id=request.conversation_id)
+        # Prepare booking details
+        booking_details = {
+            'lecturer_name': request.lecturer_name,
+            'date': request.date,
+            'time': request.time,
+            'subject': request.subject,
+            'location': request.location,
+            'duration_minutes': request.duration_minutes
+        }
         
-        # Create the booking directly
-        booking_slot = lecturer_availability.create_booking_slot(
+        # Attempt to create booking
+        booking_success = BookingService.create_booking_slot(
             db=db,
             availability_id=request.availability_id,
-            user_id=getattr(current_user, 'id') if current_user else None,
+            user=current_user,
             booking_date=request.date,
             booking_time=request.time,
-            subject=request.subject,
-            notes=f"Confirmed via chat at {datetime.now().isoformat()}"
+            subject=request.subject
         )
         
-        if booking_slot:
-            # Update conversation status to complete
-            conversation.update(
-                db, 
-                db_obj=conv, 
-                obj_in=ConversationUpdate(booking_status="complete")
-            )
-            
-            # Send email confirmation if user has email
-            email_sent = False
-            if current_user and hasattr(current_user, 'email') and current_user.email:
-                from app.core.email import send_booking_confirmation_email
-                booking_details = {
-                    'lecturer_name': request.lecturer_name,
-                    'date': request.date,
-                    'time': request.time,
-                    'subject': request.subject,
-                    'location': request.location,
-                    'duration_minutes': request.duration_minutes
-                }
-                email_sent = send_booking_confirmation_email(current_user.email, booking_details)
-            
-            # Create enhanced success message
-            success_message = "🎉 **Booking Confirmed Successfully!**\n\n"
-            success_message += "📅 **Your Appointment Details:**\n"
-            success_message += f"👨‍🏫 **Lecturer:** {request.lecturer_name}\n"
-            success_message += f"📅 **Date:** {request.date}\n"
-            success_message += f"⏰ **Time:** {request.time}\n"
-            success_message += f"📚 **Subject:** {request.subject}\n"
-            success_message += f"📍 **Location:** {request.location}\n"
-            success_message += f"⏱️ **Duration:** {request.duration_minutes} minutes\n\n"
-            
-            if email_sent:
-                success_message += "📧 **Email Confirmation Sent!** Check your inbox for detailed booking information.\n\n"
-            else:
-                success_message += "📧 Email confirmation will be sent shortly.\n\n"
-                
-            
+        if booking_success:
+            # Complete conversation and send email
+            BookingService.complete_conversation(db, request.conversation_id)
+            email_sent = BookingService.send_booking_confirmation_email(current_user, booking_details)
+            success_message = BookingService.generate_success_message(booking_details, email_sent)
         else:
-            # Booking failed
-            success_message = "❌ **Unable to Complete Booking**\n\n"
-            success_message += "This time slot may have been taken by another student. "
-            success_message += "Please try selecting a different time slot.\n\n"
-            success_message += "💡 **Tip:** Popular time slots fill up quickly. Consider booking alternative times for better availability."
+            success_message = BookingService.generate_failure_message()
+            email_sent = False
         
         # Save bot response
-        bot_message = MessageCreate(
-            content=success_message,
-            sender="bot",
-            is_appropriate=True
-        )
-        message.create(db, obj_in=bot_message, conversation_id=request.conversation_id)
+        ConversationService.save_bot_message(db, success_message, request.conversation_id)
         
         return EnhancedChatResponse(
             response=success_message,
@@ -157,8 +116,8 @@ async def confirm_booking(
             booking_options=[],
             needs_availability_check=False,
             suggested_next_action="complete",
-            email_sent=email_sent if booking_slot else False,
-            booking_status="complete" if booking_slot else "ongoing"
+            email_sent=email_sent if booking_success else False,
+            booking_status="complete" if booking_success else "ongoing"
         )
         
     except HTTPException:
@@ -177,28 +136,13 @@ async def cancel_booking(
     Handle booking cancellation - allows user to continue chatting
     """
     try:
-        # Validate conversation
-        conv = conversation.get(db, id=request.conversation_id)
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+        # Get and validate conversation
+        conv = ConversationService.get_or_create_conversation(db, request.conversation_id, current_user)
         
-        # Add user's "No" message
-        user_message = MessageCreate(
-            content="No",
-            sender="user",
-            is_appropriate=True
-        )
-        message.create(db, obj_in=user_message, conversation_id=request.conversation_id)
-        
-        # Add bot's continue message
+        # Save user's "No" message and bot's continue message
+        ConversationService.save_user_message(db, "No", request.conversation_id)
         continue_message = "No problem! I can help you find another time or answer any more questions about booking. Do you need any more help?"
-        
-        bot_message = MessageCreate(
-            content=continue_message,
-            sender="bot",
-            is_appropriate=True
-        )
-        message.create(db, obj_in=bot_message, conversation_id=request.conversation_id)
+        ConversationService.save_bot_message(db, continue_message, request.conversation_id)
         
         return EnhancedChatResponse(
             response=continue_message,
@@ -223,113 +167,53 @@ async def chat_with_ai(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     try:
-        # Check if user is active
-        if current_user and not bool(current_user.is_active):
-            raise HTTPException(
-                status_code=403, 
-                detail="Your account has been suspended due to policy violations. Please contact support."
-            )
+        # Check user status
+        UserService.check_user_status(current_user)
         
-        # Moderate the user's message
-        moderation_result = await moderate_content(request.message)
+        # Moderate content and handle violations
+        moderation_data = await ModerationService.moderate_user_content(request.message, current_user, db)
         
-        def should_block(mod_result):
-            return mod_result.get('violation_type') == 'BLOCK'
-        
-        def should_warn(mod_result):
-            return mod_result.get('violation_type') == 'WARNING'
-        
-        if should_block(moderation_result):
-            if current_user:
-                updated_user = user_crud.increment_violation(
-                    db=db, 
-                    user=current_user, 
-                    violation_type="BLOCK"
-                )
-                logger.warning(f"User {current_user.id} content blocked. Violations: {updated_user.violation_count}")
-                
-                if not bool(updated_user.is_active):
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Your account has been suspended due to repeated policy violations. Please contact support."
-                    )
-            
+        if moderation_data["should_block"]:
             return EnhancedChatResponse(
                 response="Your message has been blocked due to policy violations. Please ensure your messages are appropriate and constructive.",
                 conversation_id=request.conversation_id or 0,
                 is_appropriate=False,
                 moderation_action="BLOCKED",
-                warning_message="Content blocked due to policy violations. Repeated violations may result in account suspension."
+                warning_message=moderation_data["warning_message"]
             )
         
-        if should_warn(moderation_result):
-            if current_user:
-                updated_user = user_crud.increment_violation(
-                    db=db, 
-                    user=current_user, 
-                    violation_type="WARNING"
-                )
-                logger.info(f"User {current_user.id} content warning. Violations: {updated_user.violation_count}")
-                
-                if not bool(updated_user.is_active):
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Your account has been suspended due to repeated policy violations. Please contact support."
-                    )
-                
-                current_user = updated_user
+        # Update current_user if violations were handled
+        if moderation_data["should_warn"]:
+            current_user = moderation_data["updated_user"]
         
-        if request.conversation_id:
-            conv = conversation.get(db, id=request.conversation_id)
-            if not conv:
-                raise HTTPException(status_code=404, detail="Conversation not found")
-            
-            if getattr(conv, 'booking_status') == 'complete':
-                return EnhancedChatResponse(
-                    response="✅ **This conversation has been completed.** Your booking has been confirmed.\n\nIf you need to make a new appointment, please start a new conversation by refreshing the page.",
-                    conversation_id=request.conversation_id,
-                    is_appropriate=True,
-                    moderation_action="CLEAN",
-                    booking_options=[],
-                    needs_availability_check=False,
-                    suggested_next_action="complete"
-                )
-            
-            if current_user and conv.user_id and int(getattr(conv, 'user_id')) != int(getattr(current_user, 'id')):
-                raise HTTPException(status_code=403, detail="Access denied")
-        else:
-            conv_data = ConversationCreate(
-                user_id=getattr(current_user, 'id') if current_user else None,
-                context=request.context or "consultant"
-            )
-            conv = conversation.create(db, obj_in=conv_data)
-
-        user_message = MessageCreate(
-            content=request.message,
-            sender="user",
-            is_appropriate=True
+        # Get or create conversation
+        conv = ConversationService.get_or_create_conversation(
+            db, request.conversation_id, current_user, request.context or "consultant"
         )
-        user_msg_obj = message.create(db, obj_in=user_message, conversation_id=getattr(conv, 'id'))
-
-        db_messages = message.get_by_conversation(db, conversation_id=getattr(conv, 'id'))
-        historical_messages = db_messages[:-1] if db_messages else []
-        history_analysis = ChatHistoryManager.analyze_conversation_history(historical_messages)
         
-        future_bot_count = getattr(conv, 'bot_response_count', 0) + 1
-        if ChatHistoryManager.should_stop_conversation(conv, future_bot_count):
-            # Update conversation status to abandoned if not already
-            if getattr(conv, 'booking_status') != "abandoned":
-                setattr(conv, 'booking_status', "abandoned")
-                conversation.update(db, db_obj=conv, obj_in=ConversationUpdate(booking_status="abandoned"))
-            
-            stop_message = ChatHistoryManager.get_stop_message()
-            
-            bot_message = MessageCreate(
-                content=stop_message,
-                sender="bot",
-                is_appropriate=True
+        # Validate access and check completion status
+        ConversationService.validate_conversation_access(conv, current_user)
+        
+        if ConversationService.check_conversation_completed(conv):
+            return EnhancedChatResponse(
+                response="✅ **This conversation has been completed.** Your booking has been confirmed.\n\nIf you need to make a new appointment, please start a new conversation by refreshing the page.",
+                conversation_id=getattr(conv, 'id'),
+                is_appropriate=True,
+                moderation_action="CLEAN",
+                booking_options=[],
+                needs_availability_check=False,
+                suggested_next_action="complete"
             )
-            message.create(db, obj_in=bot_message, conversation_id=getattr(conv, 'id'))
+
+        # Save user message and get conversation history
+        user_msg_obj = ConversationService.save_user_message(db, request.message, getattr(conv, 'id'))
+        historical_messages = ConversationService.get_conversation_history(db, getattr(conv, 'id'))
+        
+        # Check conversation limits
+        future_bot_count = getattr(conv, 'bot_response_count', 0) + 1
+        if ConversationService.should_stop_conversation(conv, future_bot_count):
+            stop_message = ConversationService.abandon_conversation(db, conv)
+            ConversationService.save_bot_message(db, stop_message, getattr(conv, 'id'))
             
             return EnhancedChatResponse(
                 response=stop_message,
@@ -338,8 +222,9 @@ async def chat_with_ai(
                 moderation_action="CLEAN"
             )
         
-        conversation_history_str = ChatHistoryManager.convert_messages_to_history_string(historical_messages)
-        ChatHistoryManager.update_conversation_status(db, conv, request.message, conversation_history_str)
+        # Prepare conversation for processing
+        conversation_history_str = ConversationService.format_conversation_for_processing(historical_messages)
+        ConversationService.update_conversation_status(db, conv, request.message, conversation_history_str)
         
         # BOOKING PROCESSING
         try:
@@ -405,12 +290,14 @@ async def chat_with_ai(
                 })
 
             else:
-                if intent == "C" and not time_range and not booking_options:
-                    pass  
-                elif intent == "O" or (not time_range and not booking_options):
-                    if "❌" in ai_response and ("không có thời gian" in ai_response.lower() or "no matching" in ai_response.lower()):
-                        ai_response = "I'm here to help you with appointment scheduling. Please let me know what specific time you'd prefer, or ask about lecturer availability, and I'll assist you in finding the best options."
-                        booking_result["response_text"] = ai_response
+                # Only apply fallback logic if booking_response_generator clearly failed
+                if intent == "O" and not input_slots and not time_range and not booking_options:
+                    # This is truly general chat, not booking-related
+                    pass
+                elif intent == "C" and not input_slots and not time_range and not booking_options:
+                    # Booking inquiry but no specific information extracted
+                    ai_response = "Tôi có thể giúp bạn tìm thời gian phù hợp! Bạn muốn đặt lịch vào thời gian nào?"
+                    booking_result["response_text"] = ai_response
             
         except Exception as e:
             logger.error(f"Enhanced booking processing failed: {e}")
@@ -428,25 +315,10 @@ async def chat_with_ai(
                 "suggested_next_action": "provide_info"
             }
 
-        bot_message = MessageCreate(
-            content=ai_response,
-            sender="bot",
-            is_appropriate=True
-        )
-        message.create(db, obj_in=bot_message, conversation_id=getattr(conv, 'id'))
-        
-        ChatHistoryManager.increment_bot_response_count(db, conv)
-
-        if not getattr(conv, 'title') and len(db_messages) <= 2:
-            title = request.message[:50] + "..." if len(request.message) > 50 else request.message
-            conversation.update(db, db_obj=conv, obj_in=ConversationUpdate(title=title))
-
-        warning_message = None
-        if should_warn(moderation_result):
-            remaining_violations = 5 - (getattr(current_user, 'violation_count') if current_user else 0)
-            if remaining_violations < 0:
-                remaining_violations = 0
-            warning_message = f"Your message contains potentially inappropriate content. You have {remaining_violations} warnings remaining before account suspension."
+        # Save bot response and update conversation
+        ConversationService.save_bot_message(db, ai_response, getattr(conv, 'id'))
+        ConversationService.increment_bot_response_count(db, conv)
+        ConversationService.update_conversation_title(db, conv, request.message)
 
         booking_options = [
             BookingOption(**option) for option in booking_result.get("booking_options", [])
@@ -456,8 +328,8 @@ async def chat_with_ai(
             response=ai_response,
             conversation_id=getattr(conv, 'id'),
             is_appropriate=True,
-            moderation_action=moderation_result.get('violation_type', 'CLEAN'),
-            warning_message=warning_message,
+            moderation_action=moderation_data["violation_type"],
+            warning_message=moderation_data["warning_message"],
             booking_options=booking_options,
             needs_availability_check=booking_result.get("needs_availability_check", False),
             suggested_next_action=booking_result.get("suggested_next_action", "provide_info"),
@@ -478,13 +350,8 @@ async def get_conversations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    if not bool(current_user.is_active):
-        raise HTTPException(status_code=403, detail="Account suspended")
-    
-    conversations = conversation.get_list_by_user(db, user_id=int(getattr(current_user, 'id')), skip=skip, limit=limit)
+    validated_user = UserService.validate_user_access(current_user)
+    conversations = conversation.get_list_by_user(db, user_id=int(getattr(validated_user, 'id')), skip=skip, limit=limit)
     return conversations
 
 @router.get("/conversations/{conversation_id}", response_model=dict)
@@ -493,18 +360,13 @@ async def get_conversation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    if not bool(current_user.is_active):
-        raise HTTPException(status_code=403, detail="Account suspended")
+    validated_user = UserService.validate_user_access(current_user)
     
     conv = conversation.get(db, id=conversation_id)
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    if getattr(conv, 'user_id') != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    UserService.validate_user_access(validated_user, getattr(conv, 'user_id'))
     
     messages = message.get_by_conversation(db, conversation_id=conversation_id)
     
@@ -533,18 +395,13 @@ async def delete_conversation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    if not bool(current_user.is_active):
-        raise HTTPException(status_code=403, detail="Account suspended")
+    validated_user = UserService.validate_user_access(current_user)
     
     conv = conversation.get(db, id=conversation_id)
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    if getattr(conv, 'user_id') != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    UserService.validate_user_access(validated_user, getattr(conv, 'user_id'))
     
     conversation.delete(db, id=conversation_id)
     return {"message": "Conversation deleted successfully"} 

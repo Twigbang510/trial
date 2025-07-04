@@ -26,16 +26,7 @@ const getAuthHeaders = (): Record<string, string> => {
   return headers;
 };
 
-interface Message {
-  content: string;
-  sender: string;
-}
 
-interface ChatRequest {
-  message: string;
-  conversation_id?: number;
-  context?: string;
-}
 
 interface Conversation {
   id: number;

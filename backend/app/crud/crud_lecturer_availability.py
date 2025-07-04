@@ -394,5 +394,60 @@ class CRUDLecturerAvailability(CRUDBase[LecturerAvailability, Dict[str, Any], Di
         except Exception as e:
             print(f"Error updating blocked_dates: {e}")
 
+    def get_user_bookings(
+        self, 
+        db: Session, 
+        user_id: int,
+        status_filter: Optional[List[str]] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all bookings for a specific user with lecturer details
+        """
+        try:
+            # Default status filter includes active bookings
+            if status_filter is None:
+                status_filter = ["pending", "confirmed"]
+            
+            # Query bookings with lecturer availability details
+            bookings = db.query(BookingSlot, LecturerAvailability).join(
+                LecturerAvailability,
+                BookingSlot.lecturer_availability_id == LecturerAvailability.id
+            ).filter(
+                and_(
+                    BookingSlot.user_id == user_id,
+                    BookingSlot.status.in_(status_filter)
+                )
+            ).order_by(
+                BookingSlot.booking_date.desc(),
+                BookingSlot.booking_time.desc()
+            ).limit(limit).all()
+            
+            result = []
+            for booking_slot, lecturer_availability in bookings:
+                result.append({
+                    "id": booking_slot.id,
+                    "booking_date": booking_slot.booking_date.strftime("%Y-%m-%d"),
+                    "booking_time": booking_slot.booking_time.strftime("%H:%M"),
+                    "duration_minutes": booking_slot.duration_minutes,
+                    "status": booking_slot.status,
+                    "subject": booking_slot.subject,
+                    "notes": booking_slot.notes,
+                    "created_at": booking_slot.created_at.isoformat() if booking_slot.created_at else None,
+                    "lecturer": {
+                        "id": lecturer_availability.id,
+                        "name": lecturer_availability.lecturer_name,
+                        "subject": lecturer_availability.subject,
+                        "location": lecturer_availability.location,
+                        "notes": lecturer_availability.notes
+                    }
+                })
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error getting user bookings: {e}")
+            return []
+
 # Create global instance
 lecturer_availability = CRUDLecturerAvailability(LecturerAvailability) 

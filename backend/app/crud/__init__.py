@@ -1,3 +1,4 @@
 from .crud_conversation import conversation, message
 from .crud_booking_analysis import booking_analysis
 from .crud_lecturer_availability import lecturer_availability
+from .crud_career_analysis import career_analysis

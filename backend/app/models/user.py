@@ -24,4 +24,5 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    conversations = relationship("Conversation", back_populates="user") 
+    conversations = relationship("Conversation", back_populates="user")
+    career_analyses = relationship("CareerAnalysis", back_populates="user") 

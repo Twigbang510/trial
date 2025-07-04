@@ -48,9 +48,9 @@ export const useChatTabs = () => {
           tabs: [...DEFAULT_TABS, ...conversationTabs]
         }));
       }
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    } finally {
+          } catch (error) {
+        // Error loading conversations
+      } finally {
       setIsLoadingConversations(false);
     }
   }, []);
@@ -61,8 +61,6 @@ export const useChatTabs = () => {
       const conversation = await chatbotApi.getConversation(conversationId);
       
       if (conversation && conversation.messages) {
-        console.log(`✅ Loaded ${conversation.messages.length} messages for conversation ${conversationId}`);
-        
         const messages: MessageType[] = conversation.messages.map((msg) => ({
           id: msg.id.toString(),
           content: msg.content,
@@ -87,11 +85,9 @@ export const useChatTabs = () => {
             tabs: updatedTabs
           };
         });
-      } else {
-        console.warn(`❌ No conversation or messages found for ID: ${conversationId}`);
       }
     } catch (error) {
-      console.error(`❌ Failed to load messages for conversation ${conversationId}:`, error);
+      // Failed to load conversation messages
     }
   }, []);
 
@@ -104,9 +100,7 @@ export const useChatTabs = () => {
     setTabsState(prev => {
       const tab = prev.tabs.find(t => t.id === tabId);
       
-      // If switching to a conversation tab that hasn't loaded messages yet
       if (tab?.type === 'conversation' && tab.conversationId && tab.messages.length === 0) {
-        console.log('🔄 Loading messages for conversation:', tab.conversationId);
         loadConversationMessages(tab.conversationId);
       }
 
@@ -141,9 +135,7 @@ export const useChatTabs = () => {
       ]
     }));
 
-    // Load messages immediately if we have a conversationId
     if (conversationId) {
-      console.log('🔄 Auto-loading messages for new conversation tab:', conversationId);
       loadConversationMessages(conversationId);
     }
 

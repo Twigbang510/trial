@@ -16,15 +16,9 @@ const BookingOptions: React.FC<BookingOptionsProps> = ({
   className = '',
   disabled = false
 }) => {
-  console.log('🎯 BookingOptions component rendered!');
-  console.log('Options received:', options);
-  console.log('Options length:', options?.length);
-  
   if (!options || options.length === 0) {
-    console.log('❌ BookingOptions: No options provided, returning null');
     return null;
   }
-
 
   const allOptions = options;
 

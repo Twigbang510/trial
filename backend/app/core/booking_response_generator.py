@@ -16,7 +16,6 @@ class BookingResponseGenerator:
     """
     
     def __init__(self):
-        # Configure Gemini
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.client = genai.GenerativeModel('gemini-2.0-flash')
     
@@ -85,26 +84,20 @@ Respond with a JSON object containing BOTH analysis and response:
         Returns complete response with options
         """
         try:
-            # Step 1: Get combined analysis + response from AI
             ai_result = await self._call_ai_combined(user_message, conversation_history)
             
-            # Step 2: Extract analysis and response
             analysis = ai_result.get("analysis", {})
             ai_response = ai_result.get("response", {})
             
-            # Step 3: Check if we need availability matching
             booking_options = []
             if ai_response.get("needs_availability_check") and db_session:
                 booking_options = await self._find_booking_options(analysis, db_session)
             
-            # Step 4: Enhance response text with booking options
             enhanced_response = self._enhance_response_with_options(
                 ai_response.get("text", ""), booking_options
             )
             
-            # Step 5: Return combined result
             return {
-                # Analysis results (for database storage)
                 "intent": analysis.get("intent", "O"),
                 "safety_score": analysis.get("safety_score", 50),
                 "is_rejection": analysis.get("is_rejection", False),
@@ -113,8 +106,6 @@ Respond with a JSON object containing BOTH analysis and response:
                 "time_range": analysis.get("time_range", []),
                 "date": analysis.get("date"),
                 "reasoning": analysis.get("reasoning", ""),
-                
-                # Response for user
                 "response_text": enhanced_response,
                 "booking_options": booking_options,
                 "needs_availability_check": ai_response.get("needs_availability_check", False),
@@ -148,33 +139,29 @@ Analyze the user's booking intent and provide an appropriate response.
                 )
             )
             
-            # Parse JSON response
             result = self._parse_json_response(response.text)
             return result
             
         except Exception as e:
             logger.warning(f"AI call failed, using fallback: {e}")
-            # Fallback to manual processing
             return self._manual_combined_processing(user_message)
     
     async def _find_booking_options(self, analysis: Dict, db_session) -> List[Dict]:
         """Find available booking options based on analysis"""
         try:
             from app.crud import lecturer_availability
-            # Determine target date
             ai_date = analysis.get("date")
             input_slots = analysis.get("input_slots", [])
-            # Ưu tiên AI date, nếu không có thì tự parse tiếng Việt
+            
             if ai_date:
                 target_date = self._parse_target_date(ai_date)
             else:
-                # Fix: analysis doesn't have user_message key, we need to pass it separately
                 target_date = self._parse_target_date(None)
-            # Get user's preferred times
+                
             user_slots = input_slots
             user_range = analysis.get("time_range", [])
             booking_options = []
-            # Try to find exact matches first
+            
             if user_slots:
                 matched_slots = lecturer_availability.find_matching_slots(
                     db_session, user_slots, target_date
@@ -190,23 +177,17 @@ Analyze the user's booking intent and provide an appropriate response.
                         "duration_minutes": slot["duration_minutes"],
                         "availability_id": slot["availability_id"]
                     })
-            # If no exact matches, find alternatives only when appropriate
+                    
             if not booking_options:
-                # Only find alternatives if:
-                # 1. User specified a time range (not specific time)
-                # 2. Or user didn't specify any specific time (general availability inquiry)
                 if user_range:
-                    # User specified range, find alternatives within that range
                     alternative_slots = lecturer_availability.find_alternative_slots_in_range(
                         db_session, user_range, target_date, limit=5
                     )
                 elif not user_slots:
-                    # User didn't specify any specific time, show general availability
                     alternative_slots = lecturer_availability.find_alternative_slots(
                         db_session, None, target_date, limit=5
                     )
                 else:
-                    # User specified specific time but no match found, don't show alternatives
                     alternative_slots = []
                 
                 for slot in alternative_slots:
@@ -220,7 +201,7 @@ Analyze the user's booking intent and provide an appropriate response.
                         "duration_minutes": slot["duration_minutes"],
                         "availability_id": slot["availability_id"]
                     })
-            # Limit total options to avoid overwhelming user
+                    
             return booking_options[:8]
         except Exception as e:
             logger.error(f"Booking options search failed: {e}")

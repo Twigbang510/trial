@@ -1,10 +1,3 @@
-# 🛡️ **Unified Content Moderation System**
-# Supports multiple approaches: OpenAI, Gemini, Local Models
-
-# COMMENTED OUT - OpenAI Moderation (can be restored)
-# from openai import OpenAI
-
-# NEW: Multiple moderation approaches
 import google.generativeai as genai
 from typing import Dict, Any, List, Optional
 from app.core.config import settings
@@ -17,11 +10,6 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-# COMMENTED OUT - OpenAI client configuration
-# Configure OpenAI client
-# client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
-
-# NEW: Configure Gemini for moderation
 model = None
 if settings.GEMINI_API_KEY:
     try:
@@ -31,7 +19,6 @@ if settings.GEMINI_API_KEY:
         logger.error(f"Failed to initialize Gemini: {e}")
         model = None
 
-# NEW: Import local models if available
 try:
     from app.core.moderation_local import moderate_content_local, moderate_content_ensemble
     LOCAL_MODELS_AVAILABLE = True
@@ -48,17 +35,14 @@ class ModerationResult:
         
     @property
     def should_block(self) -> bool:
-        """Check if content should be blocked (both flagged AND high harmful score)"""
         return self.flagged and self.harmful_score > settings.MODERATION_HARMFUL_THRESHOLD
     
     @property
     def should_warn(self) -> bool:
-        """Check if content should trigger a warning (flagged OR high harmful score, but not both)"""
         return (self.flagged or self.harmful_score > settings.MODERATION_HARMFUL_THRESHOLD) and not self.should_block
     
     @property
     def violation_type(self) -> str:
-        """Get the type of violation for logging"""
         if self.should_block:
             return "BLOCK"
         elif self.should_warn:

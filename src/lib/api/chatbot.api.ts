@@ -63,8 +63,6 @@ const chatbotApi = {
   // Enhanced chat method with booking support
   chat: async (message: string, conversationId?: number, context: string = 'consultant'): Promise<EnhancedChatApiResponse> => {
     try {
-
-      
       const headers = getAuthHeaders();
       
       const requestBody = {
@@ -79,43 +77,23 @@ const chatbotApi = {
         body: JSON.stringify(requestBody)
       });
       
-      
       if (!response.ok) {
         if (response.status === 403) {
           try {
             const errorData = await response.json();
-            console.error('403 Error data:', errorData);
             throw new Error(errorData.detail || "Account suspended due to policy violations");
           } catch (parseError) {
-            console.error('Failed to parse 403 error:', parseError);
             throw new Error("Account suspended due to policy violations");
           }
-        }
-        
-        // Try to get error text
-        try {
-          const errorText = await response.text();
-          console.error('Error response text:', errorText);
-        } catch (textError) {
-          console.error('Failed to get error text:', textError);
         }
         
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const responseData = await response.json();
-
-      
       return responseData;
     } catch (error) {
-      console.error("=== CHATBOT API ERROR ===");
-             console.error("Error type:", error?.constructor?.name);
-       console.error("Error message:", (error as Error)?.message);
-       console.error("Full error:", error);
-      
-      // Re-throw if it's a moderation/suspension error
       if (error instanceof Error && error.message.includes("suspended")) {
-        console.log('Re-throwing suspension error');
         throw error;
       }
       

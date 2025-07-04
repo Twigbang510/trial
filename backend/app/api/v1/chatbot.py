@@ -65,7 +65,7 @@ async def confirm_booking(
         # Check if conversation is already completed
         if ConversationService.check_conversation_completed(conv):
             return EnhancedChatResponse(
-                response="❌ **This conversation has already been completed.** The booking has already been confirmed.\n\nIf you need to make a new appointment, please start a new conversation.",
+                response="❌ This conversation has already been completed. The booking has already been confirmed.\n\nIf you need to make a new appointment, please start a new conversation.",
                 conversation_id=request.conversation_id,
                 is_appropriate=True,
                 moderation_action="CLEAN",
@@ -196,7 +196,7 @@ async def chat_with_ai(
         
         if ConversationService.check_conversation_completed(conv):
             return EnhancedChatResponse(
-                response="✅ **This conversation has been completed.** Your booking has been confirmed.\n\nIf you need to make a new appointment, please start a new conversation by refreshing the page.",
+                response="✅ This conversation has been completed. Your booking has been confirmed.\n\nIf you need to make a new appointment, please start a new conversation by refreshing the page.",
                 conversation_id=getattr(conv, 'id'),
                 is_appropriate=True,
                 moderation_action="CLEAN",

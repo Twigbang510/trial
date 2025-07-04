@@ -102,7 +102,7 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
     }
     
     // Create confirmation message from bot
-    const confirmationText = `Do you want to confirm booking with **${option.lecturer_name}** on **${option.date}** at **${option.time}** for **${option.subject}**?\n\n📍 **Location:** ${option.location}\n⏱️ **Duration:** ${option.duration_minutes} minutes`;
+    const confirmationText = `Do you want to confirm booking with ${option.lecturer_name} on ${option.date} at ${option.time} for ${option.subject}?\n\n📍 ${option.location}\n⏱️ ${option.duration_minutes} minutes`;
     
     const confirmationMessage: MessageType = {
       id: Date.now().toString(),

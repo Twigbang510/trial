@@ -26,25 +26,25 @@ You are an AI booking assistant that helps users schedule appointments with lect
 
 ANALYZE the user's message and RESPOND appropriately while providing booking analysis.
 
-**Intent Classification:**
+Intent Classification:
 - A (Agreed/Accepted): User confirms/agrees to a time slot
 - C (Checking/Continuing): User asks about availability or explores options  
 - O (Out of scope): Unrelated to booking
 
-**Safety Score (1-99):**
+Safety Score (1-99):
 - 1-20: Very enthusiastic, eager to book
 - 21-40: Positive, interested 
 - 41-60: Neutral, asking questions
 - 61-80: Hesitant, showing resistance
 - 81-99: Clear rejection
 
-**Time Extraction Rules:**
+Time Extraction Rules:
 - "815" → "08:15", "1430" → "14:30"
 - "8h15" → "08:15", "2pm" → "14:00"
 - "từ 8h đến 10h" → range ["08:00", "10:00"]
 - "hôm nay" → today, "ngày mai" → tomorrow
 
-**Response Guidelines:**
+Response Guidelines:
 - Be helpful and professional
 - If user mentions specific times, acknowledge them
 - If asking about availability, offer to check lecturer schedules
@@ -244,26 +244,26 @@ Analyze the user's booking intent and provide an appropriate response.
         # Nếu có exact matches, chỉ trả về response gốc
         # (Frontend sẽ hiển thị nút bên ngoài chat)
         if exact_matches:
-            enhanced_response = base_response + "\n\n✅ **Tìm thấy khung giờ phù hợp!**\n"
+            enhanced_response = base_response + "\n\n✅ Tìm thấy khung giờ phù hợp!\n"
             enhanced_response += "Vui lòng chọn khung giờ bạn muốn từ các lựa chọn bên dưới."
             return enhanced_response
         
         # Nếu không có exact matches nhưng có alternatives
         if alternatives:
-            no_exact_message = "\n\n❌ **Không có thời gian nào trùng khớp chính xác**\n"
+            no_exact_message = "\n\n❌ Không có thời gian nào trùng khớp chính xác\n"
             no_exact_message += "Tuy nhiên, tôi tìm thấy một số khung giờ gần với thời gian bạn yêu cầu:\n\n"
             
             # Hiển thị alternatives trong response text
             for i, opt in enumerate(alternatives[:5], 1):
-                no_exact_message += f"{i}. **{opt['time']}** - {opt['lecturer_name']}\n"
+                no_exact_message += f"{i}. {opt['time']} - {opt['lecturer_name']}\n"
                 no_exact_message += f"   📚 {opt['subject']} | 📍 {opt['location']} | ⏱️ {opt['duration_minutes']} phút\n"
                 no_exact_message += f"   📅 {opt['date']}\n\n"
             
-            no_exact_message += "💡 **Nhấn vào khung giờ bạn muốn để đặt lịch!**"
+            no_exact_message += "💡 Nhấn vào khung giờ bạn muốn để đặt lịch!"
             return base_response + no_exact_message
         
         # Nếu không có slot nào
-        no_match_message = "\n\n❌ **Không có thời gian nào trùng khớp**\n"
+        no_match_message = "\n\n❌ Không có thời gian nào trùng khớp\n"
         no_match_message += "Rất tiếc, không có giảng viên nào rảnh vào thời gian bạn yêu cầu. \n"
         no_match_message += "Bạn có thể:\n"
         no_match_message += "• Thử thời gian khác (ví dụ: sáng thứ 2, chiều thứ 3)\n"

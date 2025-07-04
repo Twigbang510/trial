@@ -65,17 +65,17 @@ class BookingService:
     @staticmethod
     def generate_success_message(booking_details: Dict[str, Any], email_sent: bool) -> str:
         """Generate booking success message"""
-        message = "🎉 **Booking Confirmed Successfully!**\n\n"
-        message += "📅 **Your Appointment Details:**\n"
-        message += f"👨‍🏫 **Lecturer:** {booking_details['lecturer_name']}\n"
-        message += f"📅 **Date:** {booking_details['date']}\n"
-        message += f"⏰ **Time:** {booking_details['time']}\n"
-        message += f"📚 **Subject:** {booking_details['subject']}\n"
-        message += f"📍 **Location:** {booking_details['location']}\n"
-        message += f"⏱️ **Duration:** {booking_details['duration_minutes']} minutes\n\n"
+        message = "🎉 Booking Confirmed Successfully!\n\n"
+        message += "📅 Your Appointment Details:\n"
+        message += f"👨‍🏫 Lecturer: {booking_details['lecturer_name']}\n"
+        message += f"📅 Date: {booking_details['date']}\n"
+        message += f"⏰ Time: {booking_details['time']}\n"
+        message += f"📚 Subject: {booking_details['subject']}\n"
+        message += f"📍 Location: {booking_details['location']}\n"
+        message += f"⏱️ Duration: {booking_details['duration_minutes']} minutes\n\n"
         
         if email_sent:
-            message += "📧 **Email Confirmation Sent!** Check your inbox for detailed booking information.\n\n"
+            message += "📧 Email Confirmation Sent! Check your inbox for detailed booking information.\n\n"
         else:
             message += "📧 Email confirmation will be sent shortly.\n\n"
             
@@ -84,8 +84,8 @@ class BookingService:
     @staticmethod
     def generate_failure_message() -> str:
         """Generate booking failure message"""
-        message = "❌ **Unable to Complete Booking**\n\n"
+        message = "❌ Unable to Complete Booking\n\n"
         message += "This time slot may have been taken by another student. "
         message += "Please try selecting a different time slot.\n\n"
-        message += "💡 **Tip:** Popular time slots fill up quickly. Consider booking alternative times for better availability."
+        message += "💡 Tip: Popular time slots fill up quickly. Consider booking alternative times for better availability."
         return message 

@@ -29,6 +29,16 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[int] = None
     context: Optional[str] = 'consultant'
 
+class BookingConfirmRequest(BaseModel):
+    conversation_id: int
+    availability_id: int
+    lecturer_name: str
+    date: str
+    time: str
+    subject: str
+    location: str
+    duration_minutes: int
+
 # Keep old ChatResponse for backward compatibility
 class ChatResponse(BaseModel):
     response: str
@@ -36,6 +46,175 @@ class ChatResponse(BaseModel):
     is_appropriate: bool = True
     moderation_action: Optional[str] = None
     warning_message: Optional[str] = None
+
+@router.post("/confirm-booking", response_model=EnhancedChatResponse)
+async def confirm_booking(
+    request: BookingConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Direct booking confirmation endpoint - bypasses AI processing
+    """
+    try:
+        # Validate conversation exists and user has access
+        conv = conversation.get(db, id=request.conversation_id)
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        # Check if conversation is already completed
+        if getattr(conv, 'booking_status') == 'complete':
+            return EnhancedChatResponse(
+                response="❌ **This conversation has already been completed.** The booking has already been confirmed.\n\nIf you need to make a new appointment, please start a new conversation.",
+                conversation_id=request.conversation_id,
+                is_appropriate=True,
+                moderation_action="CLEAN",
+                booking_options=[],
+                needs_availability_check=False,
+                suggested_next_action="complete"
+            )
+        
+        if current_user and getattr(conv, 'user_id') and int(getattr(conv, 'user_id')) != int(getattr(current_user, 'id')):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Add user's "Yes" message
+        user_message = MessageCreate(
+            content="Yes",
+            sender="user",
+            is_appropriate=True
+        )
+        user_msg_obj = message.create(db, obj_in=user_message, conversation_id=request.conversation_id)
+        
+        # Create the booking directly
+        booking_slot = lecturer_availability.create_booking_slot(
+            db=db,
+            availability_id=request.availability_id,
+            user_id=getattr(current_user, 'id') if current_user else None,
+            booking_date=request.date,
+            booking_time=request.time,
+            subject=request.subject,
+            notes=f"Confirmed via chat at {datetime.now().isoformat()}"
+        )
+        
+        if booking_slot:
+            # Update conversation status to complete
+            conversation.update(
+                db, 
+                db_obj=conv, 
+                obj_in=ConversationUpdate(booking_status="complete")
+            )
+            
+            # Send email confirmation if user has email
+            email_sent = False
+            if current_user and hasattr(current_user, 'email') and current_user.email:
+                from app.core.email import send_booking_confirmation_email
+                booking_details = {
+                    'lecturer_name': request.lecturer_name,
+                    'date': request.date,
+                    'time': request.time,
+                    'subject': request.subject,
+                    'location': request.location,
+                    'duration_minutes': request.duration_minutes
+                }
+                email_sent = send_booking_confirmation_email(current_user.email, booking_details)
+            
+            # Create enhanced success message
+            success_message = "🎉 **Booking Confirmed Successfully!**\n\n"
+            success_message += "📅 **Your Appointment Details:**\n"
+            success_message += f"👨‍🏫 **Lecturer:** {request.lecturer_name}\n"
+            success_message += f"📅 **Date:** {request.date}\n"
+            success_message += f"⏰ **Time:** {request.time}\n"
+            success_message += f"📚 **Subject:** {request.subject}\n"
+            success_message += f"📍 **Location:** {request.location}\n"
+            success_message += f"⏱️ **Duration:** {request.duration_minutes} minutes\n\n"
+            
+            if email_sent:
+                success_message += "📧 **Email Confirmation Sent!** Check your inbox for detailed booking information.\n\n"
+            else:
+                success_message += "📧 Email confirmation will be sent shortly.\n\n"
+                
+            
+        else:
+            # Booking failed
+            success_message = "❌ **Unable to Complete Booking**\n\n"
+            success_message += "This time slot may have been taken by another student. "
+            success_message += "Please try selecting a different time slot.\n\n"
+            success_message += "💡 **Tip:** Popular time slots fill up quickly. Consider booking alternative times for better availability."
+        
+        # Save bot response
+        bot_message = MessageCreate(
+            content=success_message,
+            sender="bot",
+            is_appropriate=True
+        )
+        message.create(db, obj_in=bot_message, conversation_id=request.conversation_id)
+        
+        return EnhancedChatResponse(
+            response=success_message,
+            conversation_id=request.conversation_id,
+            is_appropriate=True,
+            moderation_action="CLEAN",
+            booking_options=[],
+            needs_availability_check=False,
+            suggested_next_action="complete",
+            email_sent=email_sent if booking_slot else False,
+            booking_status="complete" if booking_slot else "ongoing"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error confirming booking: {e}")
+        raise HTTPException(status_code=500, detail=f"Error confirming booking: {str(e)}")
+
+@router.post("/cancel-booking", response_model=EnhancedChatResponse)
+async def cancel_booking(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Handle booking cancellation - allows user to continue chatting
+    """
+    try:
+        # Validate conversation
+        conv = conversation.get(db, id=request.conversation_id)
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        # Add user's "No" message
+        user_message = MessageCreate(
+            content="No",
+            sender="user",
+            is_appropriate=True
+        )
+        message.create(db, obj_in=user_message, conversation_id=request.conversation_id)
+        
+        # Add bot's continue message
+        continue_message = "No problem! I can help you find another time or answer any more questions about booking. Do you need any more help?"
+        
+        bot_message = MessageCreate(
+            content=continue_message,
+            sender="bot",
+            is_appropriate=True
+        )
+        message.create(db, obj_in=bot_message, conversation_id=request.conversation_id)
+        
+        return EnhancedChatResponse(
+            response=continue_message,
+            conversation_id=request.conversation_id,
+            is_appropriate=True,
+            moderation_action="CLEAN",
+            booking_options=[],
+            needs_availability_check=False,
+            suggested_next_action="provide_info"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error canceling booking: {e}")
+        raise HTTPException(status_code=500, detail=f"Error canceling booking: {str(e)}")
 
 @router.post("/chat", response_model=EnhancedChatResponse)
 async def chat_with_ai(
@@ -119,6 +298,18 @@ async def chat_with_ai(
             if not conv:
                 raise HTTPException(status_code=404, detail="Conversation not found")
             
+            # Check if conversation is completed - block further messages
+            if getattr(conv, 'booking_status') == 'complete':
+                return EnhancedChatResponse(
+                    response="✅ **This conversation has been completed.** Your booking has been confirmed.\n\nIf you need to make a new appointment, please start a new conversation by refreshing the page.",
+                    conversation_id=request.conversation_id,
+                    is_appropriate=True,
+                    moderation_action="CLEAN",
+                    booking_options=[],
+                    needs_availability_check=False,
+                    suggested_next_action="complete"
+                )
+            
             # Check if user owns this conversation (if user is logged in)
             if current_user and conv.user_id and int(getattr(conv, 'user_id')) != int(getattr(current_user, 'id')):
                 raise HTTPException(status_code=403, detail="Access denied")
@@ -174,20 +365,11 @@ async def chat_with_ai(
         conversation_history_str = ChatHistoryManager.convert_messages_to_history_string(historical_messages)
         ChatHistoryManager.update_conversation_status(db, conv, request.message, conversation_history_str)
         
-        # =================== ENHANCED BOOKING PROCESSING ===================
+        # =================== BOOKING PROCESSING ===================
         # Process booking request with combined analysis + response + availability matching
         try:
             import time
             start_time = time.time()
-            
-            # Check if this is a booking confirmation (Yes response)
-            is_booking_confirmation = await _check_booking_confirmation(
-                request.message, conversation_history_str, db, conv, current_user
-            )
-            
-            if is_booking_confirmation:
-                # Booking confirmation was handled, return the response
-                return is_booking_confirmation
             
             # Run enhanced booking processing (ONE API CALL)
             booking_result = await booking_response_generator.process_booking_request(
@@ -228,8 +410,48 @@ async def chat_with_ai(
                 conversation.update(db, db_obj=conv, obj_in=ConversationUpdate(booking_status="completed"))
                 print(f"Conversation {getattr(conv, 'id')} marked as completed due to booking confirmation")
             
-            # Use the AI-generated response instead of calling Gemini again
+            # Extract booking analysis results
+            intent = booking_result.get("intent", "O")
+            input_slots = booking_result.get("input_slots", [])
+            time_range = booking_result.get("time_range", [])
+            booking_options = booking_result.get("booking_options", [])
             ai_response = booking_result.get("response_text", "")
+            
+            # Determine if we should fallback to general chat
+            should_use_general_chat = (
+                intent == "O" or  # Out of scope
+                (intent == "C" and not input_slots and not time_range and not booking_options)  # General inquiry without specific time/options
+            )
+            
+            if should_use_general_chat:
+                # Fallback to general chat with Gemini for non-booking questions
+                conversation_history = [
+                    {"content": msg.content, "sender": msg.sender}
+                    for msg in historical_messages
+                ]
+                
+                formatted_history = format_conversation_history(conversation_history)
+                ai_response = chat_with_gemini(request.message, formatted_history, request.context or "consultant")
+                
+                # Update booking_result for consistent response format
+                booking_result.update({
+                    "response_text": ai_response,
+                    "booking_options": [],
+                    "needs_availability_check": False,
+                    "suggested_next_action": "provide_info"
+                })
+                
+                print(f"Used general chat for intent {intent} - message: {request.message[:50]}...")
+            else:
+                # Handle booking-related responses
+                if intent == "C" and not time_range and not booking_options:
+                    # Keep AI response as is for general availability questions
+                    pass  
+                elif intent == "O" or (not time_range and not booking_options):
+                    # Clean up booking-specific error messages for edge cases
+                    if "❌" in ai_response and ("không có thời gian" in ai_response.lower() or "no matching" in ai_response.lower()):
+                        ai_response = "I'm here to help you with appointment scheduling. Please let me know what specific time you'd prefer, or ask about lecturer availability, and I'll assist you in finding the best options."
+                        booking_result["response_text"] = ai_response
             
         except Exception as e:
             logger.error(f"Enhanced booking processing failed: {e}")
@@ -287,7 +509,8 @@ async def chat_with_ai(
             booking_options=booking_options,
             needs_availability_check=booking_result.get("needs_availability_check", False),
             suggested_next_action=booking_result.get("suggested_next_action", "provide_info"),
-            booking_analysis=analysis_data if 'analysis_data' in locals() else None
+            booking_analysis=analysis_data if 'analysis_data' in locals() else None,
+            booking_status=getattr(conv, 'booking_status', 'ongoing')
         )
         
     except HTTPException:
@@ -337,6 +560,7 @@ async def get_conversation(
         "id": getattr(conv, 'id'),
         "title": getattr(conv, 'title'),
         "context": getattr(conv, 'context'),
+        "booking_status": getattr(conv, 'booking_status', 'ongoing'),
         "created_at": getattr(conv, 'created_at'),
         "updated_at": getattr(conv, 'updated_at'),
         "messages": [
@@ -371,141 +595,4 @@ async def delete_conversation(
         raise HTTPException(status_code=403, detail="Access denied")
     
     conversation.delete(db, id=conversation_id)
-    return {"message": "Conversation deleted successfully"}
-
-async def _check_booking_confirmation(
-    user_message: str, 
-    conversation_history: str, 
-    db: Session, 
-    conv, 
-    current_user
-) -> Optional[EnhancedChatResponse]:
-    """
-    Check if user message is a booking confirmation and handle it
-    Returns EnhancedChatResponse if booking confirmation, None otherwise
-    """
-    try:
-        # Check if message is a confirmation (Yes/Có/Đồng ý)
-        confirmation_patterns = [
-            r'\b(yes|có|đồng ý|ok|được|xác nhận|đặt lịch)\b',
-            r'\b(y|yes)\b',
-            r'^(yes|có|ok|được)$'
-        ]
-        
-        is_confirmation = any(
-            re.search(pattern, user_message.lower().strip(), re.IGNORECASE) 
-            for pattern in confirmation_patterns
-        )
-        
-        if not is_confirmation:
-            return None
-        
-        # Extract booking details from conversation history
-        booking_details = _extract_booking_details_from_history(conversation_history)
-        
-        if not booking_details:
-            return None
-        
-        # Create the booking
-        booking_slot = lecturer_availability.create_booking_slot(
-            db=db,
-            availability_id=booking_details['availability_id'],
-            user_id=getattr(current_user, 'id') if current_user else None,
-            booking_date=booking_details['date'],
-            booking_time=booking_details['time'],
-            subject=booking_details['subject'],
-            notes=f"Confirmed via chat at {datetime.now().isoformat()}"
-        )
-        
-        if booking_slot:
-            # Update conversation status to complete
-            conversation.update(
-                db, 
-                db_obj=conv, 
-                obj_in=ConversationUpdate(booking_status="complete")
-            )
-            
-            # Create success message
-            success_message = f"✅ **Đặt lịch thành công!**\n\n"
-            success_message += f"📅 **Thông tin lịch hẹn:**\n"
-            success_message += f"• **Giảng viên:** {booking_details['lecturer_name']}\n"
-            success_message += f"• **Thời gian:** {booking_details['time']} - {booking_details['date']}\n"
-            success_message += f"• **Môn học:** {booking_details['subject']}\n"
-            success_message += f"• **Địa điểm:** {booking_details['location']}\n"
-            success_message += f"• **Thời lượng:** {booking_details['duration_minutes']} phút\n\n"
-            success_message += f"📧 Bạn sẽ nhận được email xác nhận sớm nhất.\n"
-            success_message += f"🔔 Lưu ý: Vui lòng có mặt đúng giờ và chuẩn bị đầy đủ tài liệu cần thiết.\n\n"
-            success_message += f"Cảm ơn bạn đã sử dụng dịch vụ!"
-            
-        else:
-            # Booking failed
-            success_message = "❌ **Không thể đặt lịch**\n\n"
-            success_message += "Rất tiếc, khung giờ này có thể đã được đặt bởi người khác. "
-            success_message += "Vui lòng chọn khung giờ khác hoặc thử lại sau."
-        
-        # Save bot response
-        bot_message = MessageCreate(
-            content=success_message,
-            sender="bot",
-            is_appropriate=True
-        )
-        message.create(db, obj_in=bot_message, conversation_id=getattr(conv, 'id'))
-        
-        return EnhancedChatResponse(
-            response=success_message,
-            conversation_id=getattr(conv, 'id'),
-            is_appropriate=True,
-            moderation_action="CLEAN",
-            booking_options=[],
-            needs_availability_check=False,
-            suggested_next_action="complete"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error handling booking confirmation: {e}")
-        return None
-
-def _extract_booking_details_from_history(conversation_history: str) -> Optional[dict]:
-    """
-    Extract booking details from conversation history
-    Look for confirmation messages that contain booking details
-    """
-    try:
-        # Look for confirmation message pattern
-        confirmation_pattern = r"Do you want to confirm your booking with (.+?) on (.+?) at (.+?) for (.+?)\?"
-        match = re.search(confirmation_pattern, conversation_history, re.IGNORECASE)
-        
-        if match:
-            lecturer_name = match.group(1).strip()
-            date = match.group(2).strip()
-            time = match.group(3).strip()
-            subject = match.group(4).strip()
-            
-            # Extract additional details from available time slots in history
-            # Look for availability_id in booking options
-            availability_pattern = r'"availability_id":\s*(\d+)'
-            avail_match = re.search(availability_pattern, conversation_history)
-            availability_id = int(avail_match.group(1)) if avail_match else None
-            
-            # Extract location and duration
-            location_pattern = r'"location":\s*"([^"]*)"'
-            duration_pattern = r'"duration_minutes":\s*(\d+)'
-            
-            location_match = re.search(location_pattern, conversation_history)
-            duration_match = re.search(duration_pattern, conversation_history)
-            
-            return {
-                'lecturer_name': lecturer_name,
-                'date': date,
-                'time': time,
-                'subject': subject,
-                'location': location_match.group(1) if location_match else 'TBD',
-                'duration_minutes': int(duration_match.group(1)) if duration_match else 30,
-                'availability_id': availability_id
-            }
-        
-        return None
-        
-    except Exception as e:
-        logger.error(f"Error extracting booking details: {e}")
-        return None 
+    return {"message": "Conversation deleted successfully"} 

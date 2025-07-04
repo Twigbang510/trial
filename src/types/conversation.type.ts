@@ -20,6 +20,12 @@ export interface MessageType {
   sender: 'user' | 'bot';
   timestamp: Date;
   isAppropriate?: boolean;
+  bookingOptions?: BookingOption[];
+  warningMessage?: string;
+  awaitingConfirmation?: {
+    option: BookingOption;
+    confirmationText: string;
+  };
 }
 
 export interface ConversationType {
@@ -36,6 +42,7 @@ export interface ChatTab {
   messages: MessageType[];
   isActive: boolean;
   type: 'new-chat' | 'conversation' | 'career-explorer';
+  bookingStatus?: string;
 }
 
 export interface ChatTabsState {
@@ -47,44 +54,56 @@ export interface ChatApiResponse {
   response: string;
   conversation_id: number;
   is_appropriate: boolean;
-  moderation_action?: 'CLEAN' | 'WARNING' | 'BLOCKED';
+  moderation_action?: string;
   warning_message?: string;
 }
 
-export interface EnhancedChatApiResponse {
-  response: string;
-  conversation_id: number;
-  is_appropriate: boolean;
-  moderation_action?: 'CLEAN' | 'WARNING' | 'BLOCKED';
-  warning_message?: string;
-  booking_options: BookingOption[];
-  needs_availability_check: boolean;
-  suggested_next_action: string;
+export interface EnhancedChatApiResponse extends ChatApiResponse {
+  booking_options?: BookingOption[];
+  needs_availability_check?: boolean;
+  suggested_next_action?: string;
   booking_analysis?: any;
+  email_sent?: boolean;
+  booking_status?: string;
 }
 
 export interface ConversationApiResponse {
   id: number;
   title: string;
   context: string;
+  booking_status: string;
   created_at: string;
-  updated_at?: string;
-  messages: {
+  updated_at: string;
+  messages: Array<{
     id: number;
     content: string;
     sender: string;
     is_appropriate: boolean;
     created_at: string;
-  }[];
+  }>;
 }
 
 export interface BookingOption {
-  type: string;  // "exact_match" hoặc "alternative"
+  type: string;
   lecturer_name: string;
-  date: string;  // YYYY-MM-DD
-  time: string;  // HH:MM
+  date: string;
+  time: string;
   subject: string;
   location: string;
   duration_minutes: number;
   availability_id: number;
 }
+
+export interface MessageType {
+  id: string;
+  content: string;
+  sender: 'user' | 'bot';
+  timestamp: Date;
+  bookingOptions?: BookingOption[];
+  warningMessage?: string;
+  awaitingConfirmation?: {
+    option: BookingOption;
+    confirmationText: string;
+  };
+}
+

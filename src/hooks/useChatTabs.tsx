@@ -39,7 +39,8 @@ export const useChatTabs = () => {
           conversationId: conv.id,
           messages: [], // Will be loaded when tab is activated
           isActive: false,
-          type: 'conversation' as const
+          type: 'conversation' as const,
+          bookingStatus: conv.booking_status
         }));
 
         setTabsState(prev => ({
@@ -58,25 +59,39 @@ export const useChatTabs = () => {
   const loadConversationMessages = useCallback(async (conversationId: number) => {
     try {
       const conversation = await chatbotApi.getConversation(conversationId);
-      if (conversation) {
-        const messages: MessageType[] = conversation.messages.map(msg => ({
+      
+      if (conversation && conversation.messages) {
+        console.log(`✅ Loaded ${conversation.messages.length} messages for conversation ${conversationId}`);
+        
+        const messages: MessageType[] = conversation.messages.map((msg) => ({
           id: msg.id.toString(),
           content: msg.content,
           sender: msg.sender as 'user' | 'bot',
           timestamp: new Date(msg.created_at)
         }));
 
-        setTabsState(prev => ({
-          ...prev,
-          tabs: prev.tabs.map(tab =>
-            tab.conversationId === conversationId
-              ? { ...tab, messages }
-              : tab
-          )
-        }));
+        setTabsState(prev => {
+          const updatedTabs = prev.tabs.map(tab => {
+            if (tab.conversationId === conversationId) {
+              return { 
+                ...tab, 
+                messages,
+                bookingStatus: conversation.booking_status 
+              };
+            }
+            return tab;
+          });
+
+          return {
+            ...prev,
+            tabs: updatedTabs
+          };
+        });
+      } else {
+        console.warn(`❌ No conversation or messages found for ID: ${conversationId}`);
       }
     } catch (error) {
-      console.error('Failed to load conversation messages:', error);
+      console.error(`❌ Failed to load messages for conversation ${conversationId}:`, error);
     }
   }, []);
 
@@ -85,23 +100,26 @@ export const useChatTabs = () => {
     loadConversations();
   }, [loadConversations]);
 
-  const setActiveTab = useCallback((tabId: string) => {
-    const tab = tabsState.tabs.find(t => t.id === tabId);
-    
-    // If switching to a conversation tab that hasn't loaded messages yet
-    if (tab?.type === 'conversation' && tab.conversationId && tab.messages.length === 0) {
-      loadConversationMessages(tab.conversationId);
-    }
+  const setActiveTab = useCallback((tabId: string) => {    
+    setTabsState(prev => {
+      const tab = prev.tabs.find(t => t.id === tabId);
+      
+      // If switching to a conversation tab that hasn't loaded messages yet
+      if (tab?.type === 'conversation' && tab.conversationId && tab.messages.length === 0) {
+        console.log('🔄 Loading messages for conversation:', tab.conversationId);
+        loadConversationMessages(tab.conversationId);
+      }
 
-    setTabsState(prev => ({
-      ...prev,
-      activeTabId: tabId,
-      tabs: prev.tabs.map(tab => ({
-        ...tab,
-        isActive: tab.id === tabId
-      }))
-    }));
-  }, [tabsState.tabs, loadConversationMessages]);
+      return {
+        ...prev,
+        activeTabId: tabId,
+        tabs: prev.tabs.map(tab => ({
+          ...tab,
+          isActive: tab.id === tabId
+        }))
+      };
+    });
+  }, [loadConversationMessages]);
 
   const createNewChatTab = useCallback((conversationId?: number) => {
     const newTabId = conversationId ? `conv-${conversationId}` : `chat-${Date.now()}`;
@@ -123,8 +141,14 @@ export const useChatTabs = () => {
       ]
     }));
 
+    // Load messages immediately if we have a conversationId
+    if (conversationId) {
+      console.log('🔄 Auto-loading messages for new conversation tab:', conversationId);
+      loadConversationMessages(conversationId);
+    }
+
     return newTabId;
-  }, [tabsState.tabs]);
+  }, [tabsState.tabs, loadConversationMessages]);
 
   const closeTab = useCallback((tabId: string) => {
     setTabsState(prev => {
@@ -191,6 +215,17 @@ export const useChatTabs = () => {
     }));
   }, []);
 
+  const updateTabBookingStatus = useCallback((tabId: string, bookingStatus: string) => {
+    setTabsState(prev => ({
+      ...prev,
+      tabs: prev.tabs.map(tab =>
+        tab.id === tabId
+          ? { ...tab, bookingStatus }
+          : tab
+      )
+    }));
+  }, []);
+
   const getActiveTab = useCallback(() => {
     return tabsState.tabs.find(tab => tab.id === tabsState.activeTabId) || tabsState.tabs[0];
   }, [tabsState.tabs, tabsState.activeTabId]);
@@ -211,6 +246,7 @@ export const useChatTabs = () => {
     addMessageToTab,
     updateTabTitle,
     updateTabConversationId,
+    updateTabBookingStatus,
     getTabMessages,
     refreshConversations: loadConversations
   };

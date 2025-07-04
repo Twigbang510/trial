@@ -95,7 +95,7 @@ async def moderate_content(text: str, language: Optional[str] = None) -> Dict[st
     """
     try:
         # Get moderation method preference
-        moderation_method = os.getenv("MODERATION_METHOD", "auto").lower()
+        moderation_method = os.getenv("MODERATION_METHOD", "gemini").lower()
         
         logger.info(f"Moderating content with method: {moderation_method}")
         

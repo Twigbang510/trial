@@ -1,174 +1,398 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, date, time, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from app.models.lecturer_availability import LecturerAvailability, BookingSlot
+from app.crud.base import CRUDBase
 
-class LecturerAvailabilityCRUD:
-    def get_by_id(self, db: Session, availability_id: int) -> Optional[LecturerAvailability]:
-        return db.query(LecturerAvailability).filter(LecturerAvailability.id == availability_id).first()
-
-    def get_all_active(self, db: Session) -> List[LecturerAvailability]:
-        return db.query(LecturerAvailability).filter(LecturerAvailability.is_active == True).all()
-
+class CRUDLecturerAvailability(CRUDBase[LecturerAvailability, Dict[str, Any], Dict[str, Any]]):
+    """
+    CRUD operations for lecturer availability
+    """
+    
     def find_matching_slots(
-        self, db: Session, user_slots: List[str], target_date: Optional[date] = None
-    ) -> List[Dict]:
-        """
-        Tìm các slot trùng khớp với thời gian user yêu cầu (user_slots: ['08:00', ...])
-        """
-        if not user_slots:
-            return []
-            
-        # Default to next Monday if no target date
-        if not target_date:
-            today = datetime.now().date()
-            days_ahead = 0 - today.weekday()  # Monday is 0
-            if days_ahead <= 0:  # If today is Monday or past Monday, get next Monday
-                days_ahead += 7
-            target_date = today + timedelta(days_ahead)
-            
-        results = []
-        availabilities = self.get_all_active(db)
-        
-        for avail in availabilities:
-            slots = avail.get_available_slots(target_date)
-            for slot in slots:
-                if slot['time'] in user_slots and slot.get('available', True):
-                    # Check if this slot is already booked
-                    if not self._is_slot_booked(db, avail.id, target_date, slot['time']):
-                        results.append({
-                            'lecturer_name': avail.lecturer_name,
-                            'date': target_date.strftime('%Y-%m-%d'),  # Use target_date directly
-                            'time': slot['time'],
-                            'subject': avail.subject or 'General Consultation',
-                            'location': avail.location or 'TBD',
-                            'duration_minutes': avail.slot_duration_minutes,
-                            'availability_id': avail.id
-                        })
-        return results
-
-    def find_alternative_slots(
-        self, db: Session, user_range: List[str], target_date: Optional[date] = None, limit: int = 5
-    ) -> List[Dict]:
-        """
-        Tìm các slot nằm trong khoảng thời gian user yêu cầu (user_range: ['08:00', '10:00'])
-        """
-        # Default to next Monday if no target date
-        if not target_date:
-            today = datetime.now().date()
-            days_ahead = 0 - today.weekday()  # Monday is 0
-            if days_ahead <= 0:  # If today is Monday or past Monday, get next Monday
-                days_ahead += 7
-            target_date = today + timedelta(days_ahead)
-            
-        results = []
-        availabilities = self.get_all_active(db)
-        
-        for avail in availabilities:
-            slots = avail.get_available_slots(target_date)
-            for slot in slots:
-                # If no range specified, show all available slots
-                time_in_range = True
-                if user_range and len(user_range) == 2:
-                    time_in_range = user_range[0] <= slot['time'] <= user_range[1]
-                
-                if time_in_range and slot.get('available', True):
-                    # Check if this slot is already booked
-                    if not self._is_slot_booked(db, avail.id, target_date, slot['time']):
-                        results.append({
-                            'lecturer_name': avail.lecturer_name,
-                            'date': target_date.strftime('%Y-%m-%d'),  # Use target_date directly
-                            'time': slot['time'],
-                            'subject': avail.subject or 'General Consultation',
-                            'location': avail.location or 'TBD',
-                            'duration_minutes': avail.slot_duration_minutes,
-                            'availability_id': avail.id
-                        })
-                        if len(results) >= limit:
-                            return results
-        return results
-
-    def _is_slot_booked(self, db: Session, availability_id: int, booking_date: Optional[date], booking_time: str) -> bool:
-        """Check if a specific time slot is already booked"""
-        try:
-            if not booking_date:
-                booking_date = datetime.now().date()
-            
-            # Parse time string to time object
-            time_obj = datetime.strptime(booking_time, "%H:%M").time()
-            
-            # Check if booking exists for this slot
-            existing_booking = db.query(BookingSlot).filter(
-                and_(
-                    BookingSlot.lecturer_availability_id == availability_id,
-                    BookingSlot.booking_date == booking_date,
-                    BookingSlot.booking_time == time_obj,
-                    BookingSlot.status.in_(["pending", "confirmed"])  # Only check active bookings
-                )
-            ).first()
-            
-            return existing_booking is not None
-        except Exception:
-            return False
-
-    def create_booking_slot(
         self, 
         db: Session, 
-        availability_id: int, 
-        user_id: Optional[int], 
-        booking_date: str, 
-        booking_time: str,
+        requested_times: List[str], 
+        target_date: date,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Find exact matching time slots for requested times
+        """
+        try:
+            # Convert target_date to weekday (0=Monday, 6=Sunday)
+            weekday = target_date.weekday()
+            
+            # Get all available lecturers for this day
+            available_lecturers = db.query(LecturerAvailability).filter(
+                and_(
+                    LecturerAvailability.day_of_week == weekday,
+                    LecturerAvailability.is_active == True
+                )
+            ).all()
+            
+            matching_slots = []
+            
+            for requested_time_str in requested_times:
+                try:
+                    # Parse time from string (e.g. "08:30", "14:15") 
+                    if ":" in requested_time_str:
+                        hour, minute = map(int, requested_time_str.split(":"))
+                        requested_time = time(hour, minute)
+                    else:
+                        continue
+                        
+                    for lecturer in available_lecturers:
+                        # Check if date is blocked for this lecturer
+                        date_str = target_date.strftime("%Y-%m-%d")
+                        if date_str in (lecturer.blocked_dates or []):
+                            continue
+                            
+                        # Check if requested time falls within lecturer's available hours
+                        if lecturer.start_time <= requested_time <= lecturer.end_time:
+                            # Check if this time slot is not already booked
+                            existing_booking = db.query(BookingSlot).filter(
+                                and_(
+                                    BookingSlot.lecturer_availability_id == lecturer.id,
+                                    BookingSlot.booking_date == target_date,
+                                    BookingSlot.booking_time == requested_time,
+                                    BookingSlot.status.in_(["pending", "confirmed"])
+                                )
+                            ).first()
+                            
+                            if not existing_booking:
+                                matching_slots.append({
+                                    "availability_id": lecturer.id,
+                                    "lecturer_name": lecturer.lecturer_name,
+                                    "date": target_date.strftime("%Y-%m-%d"),
+                                    "time": requested_time.strftime("%H:%M"),
+                                    "subject": lecturer.subject or "General Consultation",
+                                    "location": lecturer.location or "Office",
+                                    "duration_minutes": lecturer.slot_duration_minutes or 30
+                                })
+                                
+                except Exception as e:
+                    continue
+                    
+            return matching_slots[:limit]
+            
+        except Exception as e:
+            print(f"Error finding matching slots: {e}")
+            return []
+    
+    def find_alternative_slots(
+        self, 
+        db: Session, 
+        time_range: Optional[List[str]], 
+        target_date: date,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Find alternative time slots when exact matches aren't found
+        """
+        try:
+            # Convert target_date to weekday
+            weekday = target_date.weekday()
+            
+            # Get all available lecturers for this day
+            available_lecturers = db.query(LecturerAvailability).filter(
+                and_(
+                    LecturerAvailability.day_of_week == weekday,
+                    LecturerAvailability.is_active == True
+                )
+            ).all()
+            
+            alternative_slots = []
+            
+            for lecturer in available_lecturers:
+                # Generate available time slots for this lecturer
+                slots = self._generate_available_slots(db, lecturer, target_date)
+                alternative_slots.extend(slots)
+            
+            # Sort by time and return limited results
+            alternative_slots.sort(key=lambda x: x["time"])
+            return alternative_slots[:limit]
+            
+        except Exception as e:
+            print(f"Error finding alternative slots: {e}")
+            return []
+    
+    def find_alternative_slots_in_range(
+        self, 
+        db: Session, 
+        time_range: List[str], 
+        target_date: date,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Find alternative time slots within a specific time range
+        """
+        try:
+            # Parse time range
+            if not time_range or len(time_range) != 2:
+                return []
+            
+            start_time_str, end_time_str = time_range
+            if ":" not in start_time_str or ":" not in end_time_str:
+                return []
+                
+            start_hour, start_min = map(int, start_time_str.split(":"))
+            end_hour, end_min = map(int, end_time_str.split(":"))
+            start_time = time(start_hour, start_min)
+            end_time = time(end_hour, end_min)
+            
+            # Convert target_date to weekday
+            weekday = target_date.weekday()
+            
+            # Get all available lecturers for this day
+            available_lecturers = db.query(LecturerAvailability).filter(
+                and_(
+                    LecturerAvailability.day_of_week == weekday,
+                    LecturerAvailability.is_active == True,
+                    LecturerAvailability.start_time <= start_time,
+                    LecturerAvailability.end_time >= end_time
+                )
+            ).all()
+            
+            alternative_slots = []
+            
+            for lecturer in available_lecturers:
+                # Generate available time slots for this lecturer within range
+                slots = self._generate_available_slots_in_range(db, lecturer, target_date, start_time, end_time)
+                alternative_slots.extend(slots)
+            
+            # Sort by time and return limited results
+            alternative_slots.sort(key=lambda x: x["time"])
+            return alternative_slots[:limit]
+            
+        except Exception as e:
+            print(f"Error finding alternative slots in range: {e}")
+            return []
+    
+    def _generate_available_slots(
+        self, 
+        db: Session, 
+        lecturer: LecturerAvailability, 
+        target_date: date
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate all available time slots for a lecturer on a specific date
+        """
+        slots = []
+        
+        try:
+            # Check if date is blocked for this lecturer
+            date_str = target_date.strftime("%Y-%m-%d")
+            if date_str in (lecturer.blocked_dates or []):
+                return []
+            
+            # Start from lecturer's start time
+            current_time = lecturer.start_time
+            slot_duration = timedelta(minutes=lecturer.slot_duration_minutes or 30)
+            
+            while current_time < lecturer.end_time:
+                # Check if this slot is already booked
+                existing_booking = db.query(BookingSlot).filter(
+                    and_(
+                        BookingSlot.lecturer_availability_id == lecturer.id,
+                        BookingSlot.booking_date == target_date,
+                        BookingSlot.booking_time == current_time,
+                        BookingSlot.status.in_(["pending", "confirmed"])
+                    )
+                ).first()
+                
+                if not existing_booking:
+                    slots.append({
+                        "availability_id": lecturer.id,
+                        "lecturer_name": lecturer.lecturer_name,
+                        "date": target_date.strftime("%Y-%m-%d"),
+                        "time": current_time.strftime("%H:%M"),
+                        "subject": lecturer.subject or "General Consultation",
+                        "location": lecturer.location or "Office",
+                        "duration_minutes": lecturer.slot_duration_minutes or 30
+                    })
+                
+                # Move to next slot
+                current_datetime = datetime.combine(target_date, current_time)
+                next_datetime = current_datetime + slot_duration
+                current_time = next_datetime.time()
+                
+        except Exception as e:
+            print(f"Error generating slots for lecturer {lecturer.id}: {e}")
+            
+        return slots
+    
+    def _generate_available_slots_in_range(
+        self, 
+        db: Session, 
+        lecturer: LecturerAvailability, 
+        target_date: date,
+        start_time: time,
+        end_time: time
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate available time slots for a lecturer within a specific time range
+        """
+        slots = []
+        
+        try:
+            # Check if date is blocked for this lecturer
+            date_str = target_date.strftime("%Y-%m-%d")
+            if date_str in (lecturer.blocked_dates or []):
+                return []
+            
+            # Use the more restrictive start/end time
+            actual_start = max(lecturer.start_time, start_time)
+            actual_end = min(lecturer.end_time, end_time)
+            
+            if actual_start >= actual_end:
+                return []
+            
+            current_time = actual_start
+            slot_duration = timedelta(minutes=lecturer.slot_duration_minutes or 30)
+            
+            while current_time < actual_end:
+                # Check if this slot is already booked
+                existing_booking = db.query(BookingSlot).filter(
+                    and_(
+                        BookingSlot.lecturer_availability_id == lecturer.id,
+                        BookingSlot.booking_date == target_date,
+                        BookingSlot.booking_time == current_time,
+                        BookingSlot.status.in_(["pending", "confirmed"])
+                    )
+                ).first()
+                
+                if not existing_booking:
+                    slots.append({
+                        "availability_id": lecturer.id,
+                        "lecturer_name": lecturer.lecturer_name,
+                        "date": target_date.strftime("%Y-%m-%d"),
+                        "time": current_time.strftime("%H:%M"),
+                        "subject": lecturer.subject or "General Consultation",
+                        "location": lecturer.location or "Office",
+                        "duration_minutes": lecturer.slot_duration_minutes or 30
+                    })
+                
+                # Move to next slot
+                current_datetime = datetime.combine(target_date, current_time)
+                next_datetime = current_datetime + slot_duration
+                current_time = next_datetime.time()
+                
+        except Exception as e:
+            print(f"Error generating slots in range for lecturer {lecturer.id}: {e}")
+            
+        return slots
+    
+    def create_booking_slot(
+        self, 
+        db: Session,
+        availability_id: int,
+        user_id: Optional[int],
+        booking_date: str,  # "2025-01-27"
+        booking_time: str,  # "08:30"
         subject: Optional[str] = None,
         notes: Optional[str] = None
     ) -> Optional[BookingSlot]:
         """
-        Tạo booking slot mới khi user xác nhận
+        Create a new booking slot
         """
         try:
-            # Validate availability exists
-            availability = self.get_by_id(db, availability_id)
-            if not availability:
-                return None
-            
             # Parse date and time
-            date_obj = datetime.strptime(booking_date, "%Y-%m-%d").date()
-            time_obj = datetime.strptime(booking_time, "%H:%M").time()
+            if isinstance(booking_date, str):
+                booking_date_obj = datetime.strptime(booking_date, "%Y-%m-%d").date()
+            else:
+                booking_date_obj = booking_date
+                
+            if isinstance(booking_time, str):
+                if ":" in booking_time:
+                    hour, minute = map(int, booking_time.split(":"))
+                    booking_time_obj = time(hour, minute)
+                else:
+                    return None
+            else:
+                booking_time_obj = booking_time
             
-            # Check if slot is already booked
-            if self._is_slot_booked(db, availability_id, date_obj, booking_time):
+            # Check if slot is still available
+            existing_booking = db.query(BookingSlot).filter(
+                and_(
+                    BookingSlot.lecturer_availability_id == availability_id,
+                    BookingSlot.booking_date == booking_date_obj,
+                    BookingSlot.booking_time == booking_time_obj,
+                    BookingSlot.status.in_(["pending", "confirmed"])
+                )
+            ).first()
+            
+            if existing_booking:
+                print(f"Slot already booked: {booking_date_obj} {booking_time_obj}")
                 return None
             
             # Create new booking
-            new_booking = BookingSlot(
+            booking_slot = BookingSlot(
                 lecturer_availability_id=availability_id,
                 user_id=user_id,
-                booking_date=date_obj,
-                booking_time=time_obj,
-                duration_minutes=availability.slot_duration_minutes,
-                status="confirmed",  # Directly confirmed since user explicitly confirmed
-                subject=subject or availability.subject,
+                booking_date=booking_date_obj,
+                booking_time=booking_time_obj,
+                status="confirmed",  # Directly confirm for now
+                subject=subject,
                 notes=notes
             )
             
-            db.add(new_booking)
-            db.commit()
-            db.refresh(new_booking)
+            db.add(booking_slot)
             
-            return new_booking
+            # Update lecturer's blocked_dates if this is the first booking for this date
+            self._update_blocked_dates_if_needed(db, availability_id, booking_date_obj)
+            
+            db.commit()
+            db.refresh(booking_slot)
+            
+            print(f"Created booking slot: ID={booking_slot.id}")
+            return booking_slot
             
         except Exception as e:
-            db.rollback()
             print(f"Error creating booking slot: {e}")
+            db.rollback()
             return None
+    
+    def _update_blocked_dates_if_needed(
+        self, 
+        db: Session, 
+        availability_id: int, 
+        booking_date: date
+    ) -> None:
+        """
+        Update lecturer's blocked_dates if this date should be marked as blocked
+        (e.g., when lecturer reaches max slots per day)
+        """
+        try:
+            lecturer = db.query(LecturerAvailability).filter(
+                LecturerAvailability.id == availability_id
+            ).first()
+            
+            if not lecturer:
+                return
+            
+            # Count total bookings for this date
+            total_bookings = db.query(BookingSlot).filter(
+                and_(
+                    BookingSlot.lecturer_availability_id == availability_id,
+                    BookingSlot.booking_date == booking_date,
+                    BookingSlot.status.in_(["pending", "confirmed"])
+                )
+            ).count()
+            
+            # If reached max slots, add to blocked_dates
+            if total_bookings >= (lecturer.max_slots_per_day or 10):
+                date_str = booking_date.strftime("%Y-%m-%d")
+                blocked_dates = lecturer.blocked_dates or []
+                
+                if date_str not in blocked_dates:
+                    blocked_dates.append(date_str)
+                    lecturer.blocked_dates = blocked_dates
+                    print(f"Added {date_str} to blocked_dates for lecturer {lecturer.id} (reached max slots: {total_bookings})")
+            
+        except Exception as e:
+            print(f"Error updating blocked_dates: {e}")
 
-    def get_user_bookings(self, db: Session, user_id: int) -> List[BookingSlot]:
-        """Get all bookings for a specific user"""
-        return db.query(BookingSlot).filter(
-            and_(
-                BookingSlot.user_id == user_id,
-                BookingSlot.status.in_(["pending", "confirmed"])
-            )
-        ).order_by(BookingSlot.booking_date.desc(), BookingSlot.booking_time.desc()).all()
-
-lecturer_availability = LecturerAvailabilityCRUD() 
+# Create global instance
+lecturer_availability = CRUDLecturerAvailability(LecturerAvailability) 

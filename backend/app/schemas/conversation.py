@@ -24,16 +24,26 @@ class MessageInDB(MessageBase):
 
 class ConversationBase(BaseModel):
     title: Optional[str] = None
-    context: str = "consultant"
+    context: Optional[str] = "consultant"
     bot_response_count: int = 0
     booking_status: str = "ongoing"
 
 class ConversationCreate(ConversationBase):
     user_id: Optional[int] = None
 
-class ConversationUpdate(BaseModel):
-    title: Optional[str] = None
+class ConversationUpdate(ConversationBase):
     booking_status: Optional[str] = None
+
+class Conversation(ConversationBase):
+    id: int
+    user_id: Optional[int]
+    bot_response_count: int = 0
+    booking_status: str = "ongoing"
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
 
 class ConversationInDB(ConversationBase):
     id: int
@@ -44,10 +54,6 @@ class ConversationInDB(ConversationBase):
     class Config:
         from_attributes = True
 
-class Conversation(ConversationInDB):
-    pass
-
-# Response schemas for API
 class ConversationResponse(BaseModel):
     id: int
     title: Optional[str] = None
@@ -68,7 +74,6 @@ class ConversationListResponse(BaseModel):
     skip: int
     limit: int
 
-# New schemas for booking functionality
 class BookingOption(BaseModel):
     """Schema for booking time slot options"""
     type: str  # "exact_match" or "alternative"
@@ -80,21 +85,17 @@ class BookingOption(BaseModel):
     duration_minutes: int
     availability_id: int
 
-class EnhancedChatResponse(BaseModel):
-    """Enhanced chat response with booking options"""
+class ChatResponse(BaseModel):
     response: str
     conversation_id: int
     is_appropriate: bool = True
     moderation_action: Optional[str] = None
     warning_message: Optional[str] = None
-    
-    # New booking fields
+
+class EnhancedChatResponse(ChatResponse):
     booking_options: List[BookingOption] = []
     needs_availability_check: bool = False
     suggested_next_action: str = "provide_info"
-    
-    # Analysis metadata (optional, for debugging)
     booking_analysis: Optional[dict] = None
-
-    class Config:
-        from_attributes = True 
+    email_sent: Optional[bool] = None
+    booking_status: Optional[str] = None 

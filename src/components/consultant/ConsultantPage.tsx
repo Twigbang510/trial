@@ -14,8 +14,11 @@ export const ConsultantPage = () => {
     addMessageToTab,
     createNewChatTab,
     closeTab,
-    updateTabConversationId
+    updateTabConversationId,
+    updateTabBookingStatus
   } = useChatTabs();
+
+
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
   const canCreateNewChat = user?.status === "PENDING";
@@ -49,6 +52,7 @@ export const ConsultantPage = () => {
             onAddMessage={addMessageToTab}
             onConversationChange={handleConversationChange}
             onUpdateTabConversationId={updateTabConversationId}
+            updateTabBookingStatus={updateTabBookingStatus}
             canCreateNewChat={canCreateNewChat}
             onCreateNewTab={createNewChatTab}
             onRefreshUserData={refreshUserData}

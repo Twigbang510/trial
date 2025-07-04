@@ -2,97 +2,61 @@ import { useState, useRef, useEffect } from 'react';
 import { Mic, Paperclip, ArrowRight, User, Bot, MessageSquare, Send } from 'lucide-react';
 import { motion } from 'framer-motion';
 import chatbotApi from '@/lib/api/chatbot.api';
-import { ChatTab, MessageType } from '@/types/conversation.type';
+import { ChatTab, MessageType, BookingOption } from '@/types/conversation.type';
+import BookingOptions from '@/components/BookingOptions';
+import ConfirmationButtons from '@/components/ConfirmationButtons';
+import BookingSuccessModal from '@/components/BookingSuccessModal';
 
 interface ChatWindowTabsProps {
   activeTab: ChatTab;
   onAddMessage: (tabId: string, message: MessageType) => void;
   onConversationChange?: (conversationId: number) => void;
   onUpdateTabConversationId?: (tabId: string, conversationId: number) => void;
+  updateTabBookingStatus?: (tabId: string, status: string) => void;
   canCreateNewChat: boolean;
   onCreateNewTab: () => string;
   onRefreshUserData: () => Promise<void>;
 }
 
-// Validation function with better logic including emoji detection
+// Validation functions
 const validateMessage = (message: string): { isValid: boolean; error?: string } => {
   const trimmedMessage = message.trim();
   
-  // Check if message is empty
   if (!trimmedMessage) {
-    return { isValid: false, error: "Please enter a message" };
+    return { isValid: false, error: "Message cannot be empty" };
   }
   
-  // Check minimum length
+  const emojiRegex = /^[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+$/u;
+  if (emojiRegex.test(trimmedMessage)) {
+    return { isValid: false, error: "Message cannot contain only emojis" };
+  }
+  
   if (trimmedMessage.length < 2) {
-    return { isValid: false, error: "Message must be at least 2 characters long" };
+    return { isValid: false, error: "Message must be at least 2 characters" };
   }
   
-  // Check maximum length
   if (trimmedMessage.length > 1000) {
-    return { isValid: false, error: "Message must be less than 1000 characters" };
-  }
-  
-  // Enhanced emoji detection
-  const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F018}-\u{1F270}]/gu;
-  const emojiMatches = trimmedMessage.match(emojiRegex) || [];
-  const textWithoutEmoji = trimmedMessage.replace(emojiRegex, '').trim();
-  
-  // Check if message contains only emojis (no meaningful text)
-  if (emojiMatches.length > 0 && textWithoutEmoji.length === 0) {
-    return { isValid: false, error: "Please include text along with emojis" };
-  }
-  
-  // Check if message has too many emojis
-  if (emojiMatches.length > 10) {
-    return { isValid: false, error: "Please use fewer emojis in your message" };
-  }
-  
-  // Check for spam patterns (repeated characters)
-  const repeatedCharPattern = /(.)\1{10,}/;
-  if (repeatedCharPattern.test(trimmedMessage)) {
-    return { isValid: false, error: "Please avoid excessive repeated characters" };
-  }
-  
-  // Check for inappropriate content (basic patterns)
-  const inappropriatePatterns = [
-    /fuck|shit|damn|hell|ass/i,
-    /spam|test{3,}|hello{3,}/i
-  ];
-  
-  for (const pattern of inappropriatePatterns) {
-    if (pattern.test(trimmedMessage)) {
-      return { isValid: false, error: "Please keep your message appropriate and professional" };
-    }
+    return { isValid: false, error: "Message cannot be more than 1000 characters" };
   }
   
   return { isValid: true };
 };
 
-// Real-time validation as user types
 const validateMessageRealTime = (message: string): { showWarning: boolean; warning?: string } => {
   const trimmedMessage = message.trim();
   
   if (trimmedMessage.length > 800) {
-    return { showWarning: true, warning: `${1000 - trimmedMessage.length} characters remaining` };
+    return { showWarning: true, warning: `Characters: ${trimmedMessage.length}/1000 - Approaching limit` };
   }
   
-  if (trimmedMessage.length > 0 && trimmedMessage.length < 2) {
-    return { showWarning: true, warning: "Message too short" };
-  }
-  
-  // Check emoji count in real-time
-  const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F018}-\u{1F270}]/gu;
-  const emojiMatches = trimmedMessage.match(emojiRegex) || [];
-  
-  if (emojiMatches.length > 8) {
-    return { showWarning: true, warning: "Too many emojis" };
+  if (trimmedMessage.length > 900) {
+    return { showWarning: true, warning: `Characters: ${trimmedMessage.length}/1000 - Close to limit` };
   }
   
   return { showWarning: false };
 };
 
-const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdateTabConversationId, canCreateNewChat, onCreateNewTab, onRefreshUserData }: ChatWindowTabsProps) => {
+const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdateTabConversationId, updateTabBookingStatus, canCreateNewChat, onCreateNewTab, onRefreshUserData }: ChatWindowTabsProps) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
@@ -108,12 +72,187 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
     enterprising: '',
     conventional: ''
   });
+  const [confirmationProcessing, setConfirmationProcessing] = useState<string | null>(null);
+  const [bookingSuccessModal, setBookingSuccessModal] = useState<{
+    isOpen: boolean;
+    bookingDetails: any;
+    emailSent: boolean;
+  }>({
+    isOpen: false,
+    bookingDetails: {},
+    emailSent: false
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll to bottom when new messages are added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeTab.messages]);
+
+  // Check if conversation is completed
+  const isConversationCompleted = activeTab.bookingStatus === 'complete';
+  
+
+
+  // =================== BOOKING HANDLERS ===================
+  const handleBookingOptionSelect = (option: BookingOption) => {
+    // Check if conversation is completed
+    if (activeTab.bookingStatus === 'complete') {
+      return;
+    }
+    
+    // Create confirmation message from bot
+    const confirmationText = `Do you want to confirm booking with **${option.lecturer_name}** on **${option.date}** at **${option.time}** for **${option.subject}**?\n\n📍 **Location:** ${option.location}\n⏱️ **Duration:** ${option.duration_minutes} minutes`;
+    
+    const confirmationMessage: MessageType = {
+      id: Date.now().toString(),
+      content: confirmationText,
+      sender: 'bot',
+      timestamp: new Date(),
+      awaitingConfirmation: {
+        option,
+        confirmationText
+      }
+    };
+    
+    onAddMessage(activeTab.id, confirmationMessage);
+  };
+
+  const handleConfirmBooking = async (option: BookingOption) => {
+    // Check if conversation is completed
+    if (activeTab.bookingStatus === 'complete') {
+      return;
+    }
+    
+    setConfirmationProcessing('confirming');
+    
+    // Add user's "Yes" response immediately
+    const userYesMessage: MessageType = {
+      id: Date.now().toString(),
+      content: "Yes",
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    onAddMessage(activeTab.id, userYesMessage);
+
+    try {
+      // Call direct booking confirmation API (no AI processing)
+      const response = await chatbotApi.confirmBooking({
+        conversation_id: activeTab.conversationId!,
+        availability_id: option.availability_id,
+        lecturer_name: option.lecturer_name,
+        date: option.date,
+        time: option.time,
+        subject: option.subject,
+        location: option.location,
+        duration_minutes: option.duration_minutes
+      });
+      
+      // Add success response from API
+      const successMessage: MessageType = {
+        id: (Date.now() + 1).toString(),
+        content: response.response,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      onAddMessage(activeTab.id, successMessage);
+      
+      // Update tab booking status immediately
+      if (response.booking_status && updateTabBookingStatus) {
+        console.log('🎯 Updating booking status to:', response.booking_status);
+        updateTabBookingStatus(activeTab.id, response.booking_status);
+      }
+      
+      // Show modal if booking was successful and email info is available
+      if (response.email_sent !== undefined) {
+        setBookingSuccessModal({
+          isOpen: true,
+          bookingDetails: {
+            lecturer_name: option.lecturer_name,
+            date: option.date,
+            time: option.time,
+            subject: option.subject,
+            location: option.location,
+            duration_minutes: option.duration_minutes
+          },
+          emailSent: response.email_sent
+        });
+      }
+      
+    } catch (error) {
+      console.error('Booking confirmation failed:', error);
+      const errorMessage: MessageType = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, there was an error confirming your booking. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      onAddMessage(activeTab.id, errorMessage);
+    } finally {
+      // Clear confirmation processing state
+      setTimeout(() => {
+        setConfirmationProcessing(null);
+      }, 1000);
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    // Check if conversation is completed
+    if (activeTab.bookingStatus === 'complete') {
+      return;
+    }
+    
+    setConfirmationProcessing('cancelling');
+    
+    try {
+      // Call booking cancellation API
+      const response = await chatbotApi.cancelBooking(activeTab.conversationId!);
+      
+      // Add user's "No" response
+      const userNoMessage: MessageType = {
+        id: Date.now().toString(),
+        content: "No",
+        sender: 'user',
+        timestamp: new Date(),
+      };
+      
+      // Add bot's continue response from API
+      const continueMessage: MessageType = {
+        id: (Date.now() + 1).toString(),
+        content: response.response,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      
+      onAddMessage(activeTab.id, userNoMessage);
+      onAddMessage(activeTab.id, continueMessage);
+      
+    } catch (error) {
+      console.error('Booking cancellation failed:', error);
+      // Fallback to local messages
+      const userNoMessage: MessageType = {
+        id: Date.now().toString(),
+        content: "No",
+        sender: 'user',
+        timestamp: new Date(),
+      };
+      
+      const continueMessage: MessageType = {
+        id: (Date.now() + 1).toString(),
+        content: "No problem! I can help you find another time or answer any more questions about booking. Do you need any more help?",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      
+      onAddMessage(activeTab.id, userNoMessage);
+      onAddMessage(activeTab.id, continueMessage);
+    } finally {
+      // Clear confirmation processing state
+      setTimeout(() => {
+        setConfirmationProcessing(null);
+      }, 500);
+    }
+  };
 
   const handleSendMessage = async () => {
     // Check if chat is blocked
@@ -159,6 +298,7 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
     try {
       // Call chatbot API
       const context = activeTab.type === 'career-explorer' ? 'consultant' : 'consultant';
+      
       const response = await chatbotApi.chat(userMessage.content, conversationId, context);
       
       // Handle moderation responses
@@ -185,17 +325,27 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
           try {
             await onRefreshUserData();
           } catch (refreshError) {
-            console.error('Failed to refresh user data after warning:', refreshError);
+            // Silent fail for refresh
           }
         }
         
-        // Add bot response to the target tab
+        // Determine bot message content
+        let botContent = response.response;
+        
+        // If there are booking options, show simplified message
+        if (response.booking_options && response.booking_options.length > 0) {
+          botContent = `I found ${response.booking_options.length} time slots that match your request. Please select the time slot you want to book:`;
+        }
+        
+        // Add bot response to the target tab WITH BOOKING OPTIONS
         const botMessage: MessageType = {
           id: (Date.now() + 1).toString(),
-          content: response.response,
+          content: botContent,
           sender: 'bot',
           timestamp: new Date(),
-          isAppropriate: response.is_appropriate
+          isAppropriate: response.is_appropriate,
+          bookingOptions: response.booking_options || [],
+          warningMessage: response.warning_message
         };
 
         onAddMessage(targetTabId, botMessage);
@@ -214,8 +364,6 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
       }
 
     } catch (error) {
-      console.error('Error getting bot response:', error);
-      
       // Handle account suspension
       if (error instanceof Error && error.message.includes('suspended')) {
         setIsBlocked(true);
@@ -224,7 +372,7 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
         try {
           await onRefreshUserData();
         } catch (refreshError) {
-          console.error('Failed to refresh user data after suspension:', refreshError);
+          // Silent fail for refresh
         }
         
         const suspensionMessage: MessageType = {
@@ -361,7 +509,7 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
     );
   }
 
-  // Chat Tab (new-chat or conversation)
+  // Chat Tab (new-chat or conversation) - WITH BOOKING SUPPORT
   return (
     <div className="flex-1 flex flex-col border-2 border-[#332288] rounded-lg h-[calc(100vh-180px)] md:h-[calc(100vh-200px)]">
       {/* Messages Area */}
@@ -376,13 +524,13 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
                   <p className="text-xs md:text-sm px-4">
                     {canCreateNewChat 
                       ? "Type your message below and I'll help you with education and career guidance."
-                      : "Please complete your schedule to start chatting."
+                      : "Please complete your schedule to start the conversation."
                     }
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm md:text-base">Start a conversation by typing a message below.</p>
+                  <p className="text-sm md:text-base">Start the conversation by typing your message below.</p>
                   <p className="text-xs md:text-sm mt-2 px-4">Ask me anything about education, career guidance, or university information.</p>
                 </>
               )}
@@ -402,20 +550,67 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
                 </div>
               )}
               
-              <div
-                className={`max-w-[85%] md:max-w-[80%] rounded-lg p-2 md:p-3 ${
-                  msg.sender === 'user'
-                    ? 'bg-[#332288] text-white'
-                    : 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                <p className="text-xs mt-1 opacity-70">
-                  {msg.timestamp.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </p>
+              <div className="flex flex-col max-w-[85%] md:max-w-[80%]">
+                <div
+                  className={`rounded-lg p-2 md:p-3 ${
+                    msg.sender === 'user'
+                      ? 'bg-[#332288] text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-xs mt-1 opacity-70">
+                    {msg.timestamp.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </p>
+                </div>
+
+                {/* =================== BOOKING OPTIONS =================== */}
+                {msg.bookingOptions && msg.bookingOptions.length > 0 && !isConversationCompleted && (
+                  <div className="mt-2">
+                    <BookingOptions 
+                      options={msg.bookingOptions} 
+                      onOptionSelect={handleBookingOptionSelect}
+                      disabled={isConversationCompleted}
+                    />
+                  </div>
+                )}
+
+                {/* Completion notice for booking options */}
+                {msg.bookingOptions && msg.bookingOptions.length > 0 && isConversationCompleted && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-700">✅ This conversation has been completed. Your booking has been confirmed.</p>
+                  </div>
+                )}
+
+                {/* =================== WARNING MESSAGE =================== */}
+                {msg.warningMessage && (
+                  <div className="mt-2 p-2 bg-yellow-100 border border-yellow-400 rounded-lg">
+                    <p className="text-xs text-yellow-800">{msg.warningMessage}</p>
+                  </div>
+                )}
+
+                {/* =================== CONFIRMATION BUTTONS =================== */}
+                {msg.awaitingConfirmation && !isConversationCompleted && (
+                  <div className="mt-4 flex justify-center">
+                    <ConfirmationButtons
+                      onConfirm={() => handleConfirmBooking(msg.awaitingConfirmation!.option)}
+                      onCancel={handleCancelBooking}
+                      confirmText="Yes"
+                      cancelText="No"
+                      disabled={!!confirmationProcessing || isConversationCompleted}
+                    />
+                  </div>
+                )}
+
+                {/* Completion notice for confirmation buttons */}
+                {msg.awaitingConfirmation && isConversationCompleted && (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                    <p className="text-sm text-green-700">✅ Booking confirmed - conversation completed</p>
+                  </div>
+                )}
               </div>
               
               {msg.sender === 'user' && (
@@ -440,6 +635,9 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
               </div>
             </div>
           )}
+          
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
@@ -474,6 +672,21 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
             )}
           </div>
         )}
+
+        {/* Conversation completed notice */}
+        {isConversationCompleted && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs">✓</span>
+              </div>
+              <p className="text-sm text-green-700 font-medium">Conversation Completed</p>
+            </div>
+            <p className="text-xs text-green-600 mt-1">
+              Your booking has been confirmed. Start a new conversation to make another appointment.
+            </p>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="flex gap-2 md:gap-3">
           <div className="flex-1 relative">
@@ -481,7 +694,11 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
               type="text"
               value={message}
               onChange={handleInputChange}
-              placeholder={isInputDisabled || isBlocked ? "Chat is currently disabled" : "Type your message here..."}
+              placeholder={
+                isConversationCompleted ? "Conversation completed - start new chat for another booking" :
+                isInputDisabled || isBlocked ? "Current chat is disabled" : 
+                "Type your message here..."
+              }
               className={`w-full px-3 md:px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#332288] focus:border-transparent text-sm text-black md:text-base transition-all duration-200 ${
                 isInputDisabled || isBlocked
                   ? 'bg-gray-100 border-gray-300 text-black cursor-not-allowed' 
@@ -493,7 +710,7 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
                   ? 'bg-white border-orange-300 focus:ring-orange-400'
                   : 'bg-white border-gray-300'
               }`}
-              disabled={isInputDisabled || isLoading || isBlocked}
+              disabled={isInputDisabled || isLoading || isBlocked || isConversationCompleted}
               maxLength={1000}
             />
             
@@ -507,12 +724,12 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
           
           <button
             type="submit"
-            disabled={!message.trim() || isLoading || isInputDisabled || !!validationError || isBlocked}
-            className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm md:text-base ${
-              !message.trim() || isLoading || isInputDisabled || !!validationError || isBlocked
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-[#332288] text-white hover:bg-[#2a1f70] shadow-md hover:shadow-lg'
-            }`}
+            disabled={!message.trim() || isLoading || isInputDisabled || !!validationError || isBlocked || isConversationCompleted}
+                          className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm md:text-base ${
+                !message.trim() || isLoading || isInputDisabled || !!validationError || isBlocked || isConversationCompleted
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-[#332288] text-white hover:bg-[#2a1f70] shadow-md hover:shadow-lg'
+              }`}
           >
             {isLoading ? (
               <div className="flex items-center gap-2">
@@ -525,6 +742,14 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
           </button>
         </form>
       </div>
+
+      {/* Booking Success Modal */}
+      <BookingSuccessModal
+        isOpen={bookingSuccessModal.isOpen}
+        onClose={() => setBookingSuccessModal(prev => ({ ...prev, isOpen: false }))}
+        bookingDetails={bookingSuccessModal.bookingDetails}
+        emailSent={bookingSuccessModal.emailSent}
+      />
     </div>
   );
 };

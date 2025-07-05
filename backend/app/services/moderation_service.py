@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from app.core.moderation import moderate_content
 from app.models.user import User
 from app.services.user_service import UserService
@@ -11,7 +11,7 @@ class ModerationService:
     """Service for content moderation and policy enforcement"""
     
     @staticmethod
-    async def moderate_user_content(content: str, user: Optional[User], db: Session) -> Dict[str, Any]:
+    async def moderate_user_content(content: str, user: Optional[User], db: Database) -> Dict[str, Any]:
         """Moderate user content and handle violations"""
         # Get moderation result
         moderation_result = await moderate_content(content)

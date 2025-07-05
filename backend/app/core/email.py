@@ -164,4 +164,8 @@ def verify_code(email: str, code: str):
         # Delete code after successful verification
         del verification_codes[email]
         return True
-    return False 
+    return False
+
+def send_password_reset_email(email: str, code: str):
+    """Send password reset email using the same template as verification email but with reset flag."""
+    return send_verification_email(email, code, is_reset=True) 

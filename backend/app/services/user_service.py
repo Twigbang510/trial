@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from fastapi import HTTPException
 from app.crud.crud_user import user_crud
 from app.models.user import User
@@ -11,7 +11,7 @@ class UserService:
     """Service for user-related business logic"""
     
     @staticmethod
-    def validate_user_access(current_user: Optional[User], required_user_id: Optional[int] = None) -> User:
+    def validate_user_access(current_user: Optional[User], required_user_id: Optional[str] = None) -> User:
         """Validate user authentication and authorization"""
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -19,7 +19,7 @@ class UserService:
         if not bool(current_user.is_active):
             raise HTTPException(status_code=403, detail="Account suspended")
         
-        if required_user_id and int(getattr(current_user, 'id')) != int(required_user_id):
+        if required_user_id and str(getattr(current_user, 'id')) != str(required_user_id):
             raise HTTPException(status_code=403, detail="Access denied")
         
         return current_user
@@ -34,7 +34,7 @@ class UserService:
             )
     
     @staticmethod
-    def handle_user_violation(db: Session, user: Optional[User], violation_type: str) -> Optional[User]:
+    def handle_user_violation(db: Database, user: Optional[User], violation_type: str) -> Optional[User]:
         """Handle user policy violations and return updated user"""
         if not user:
             return None
@@ -46,7 +46,7 @@ class UserService:
         )
         
         log_level = logging.WARNING if violation_type == "BLOCK" else logging.INFO
-        logger.log(log_level, f"User {user.id} content {violation_type.lower()}. Violations: {updated_user.violation_count}")
+        logger.log(log_level, f"User {str(user.id)} content {violation_type.lower()}. Violations: {updated_user.violation_count}")
         
         if not bool(updated_user.is_active):
             raise HTTPException(

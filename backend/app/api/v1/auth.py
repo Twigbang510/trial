@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from app.api.deps import get_db
 from app.schemas.user import UserCreate, UserOut, UserLogin
 from app.services.auth_service import AuthService
@@ -9,7 +9,7 @@ router = APIRouter()
 @router.post("/signup", response_model=dict)
 def create_user(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     user_in: UserCreate,
 ):
     """
@@ -20,7 +20,7 @@ def create_user(
 @router.post("/signin")
 def login_for_access_token(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     user_credentials: UserLogin
 ):
     """
@@ -31,7 +31,7 @@ def login_for_access_token(
 @router.post("/verify-code")
 def verify_email_code(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     email: str,
     code: str,
 ):
@@ -43,7 +43,7 @@ def verify_email_code(
 @router.post("/forgot-password")
 def forgot_password(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     email: str,
 ):
     """
@@ -54,7 +54,7 @@ def forgot_password(
 @router.post("/reset-password")
 def reset_password(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     email: str,
     code: str,
     new_password: str,

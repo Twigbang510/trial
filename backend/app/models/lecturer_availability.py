@@ -1,48 +1,64 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, JSON, Time, Date
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from app.db.base import Base
+from typing import Optional, List
+from datetime import datetime, time, date, timedelta
+from pydantic import Field, ConfigDict
+from app.db.base import BaseDocument, PyObjectId
 
-class LecturerAvailability(Base):
+class LecturerAvailability(BaseDocument):
     """
     Store lecturer available time slots for appointment booking
     """
-    __tablename__ = "lecturer_availability"
-
-    id = Column(Integer, primary_key=True, index=True)
-    lecturer_id = Column(Integer, nullable=False)  # Can link to user table later
-    lecturer_name = Column(String(100), nullable=False)
+    lecturer_id: int = Field(..., description="Can link to user table later")
+    lecturer_name: str = Field(..., max_length=100, description="Lecturer name")
     
     # Time slot information
-    day_of_week = Column(Integer, nullable=False)  # 0=Monday, 6=Sunday
-    start_time = Column(Time, nullable=False)      # 08:00
-    end_time = Column(Time, nullable=False)        # 17:00
+    day_of_week: int = Field(..., ge=0, le=6, description="0=Monday, 6=Sunday")
+    start_time: str = Field(..., description="08:00")
+    end_time: str = Field(..., description="17:00")
     
     # Slot details
-    slot_duration_minutes = Column(Integer, default=30)  # 30 minutes per slot
-    max_slots_per_day = Column(Integer, default=10)      # Maximum bookings per day
+    slot_duration_minutes: int = Field(default=30, description="30 minutes per slot")
+    max_slots_per_day: int = Field(default=10, description="Maximum bookings per day")
     
     # Availability status
-    is_active = Column(Boolean, default=True)
-    available_dates = Column(JSON, default=list)  # Specific dates when available
-    blocked_dates = Column(JSON, default=list)    # Specific dates when not available
+    is_active: bool = Field(default=True, description="Is active")
+    available_dates: List[str] = Field(default_factory=list, description="Specific dates when available")
+    blocked_dates: List[str] = Field(default_factory=list, description="Specific dates when not available")
     
     # Metadata
-    subject = Column(String(100), nullable=True)   # Subject specialty
-    location = Column(String(200), nullable=True)  # Meeting location
-    notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    subject: Optional[str] = Field(None, max_length=100, description="Subject specialty")
+    location: Optional[str] = Field(None, max_length=200, description="Meeting location")
+    notes: Optional[str] = Field(None, description="Notes")
+    
+    model_config = ConfigDict(
+        collection_name="lecturer_availability",
+        json_schema_extra={
+            "example": {
+                "lecturer_id": 1,
+                "lecturer_name": "Dr. John Doe",
+                "day_of_week": 1,
+                "start_time": "08:00",
+                "end_time": "17:00",
+                "slot_duration_minutes": 30,
+                "max_slots_per_day": 10,
+                "is_active": True,
+                "available_dates": ["2024-01-15", "2024-01-16"],
+                "blocked_dates": ["2024-01-20"],
+                "subject": "Computer Science",
+                "location": "Room 101",
+                "notes": "Available for consultation"
+            }
+        }
+    )
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses"""
         return {
-            "id": self.id,
+            "id": str(self.id),
             "lecturer_id": self.lecturer_id,
             "lecturer_name": self.lecturer_name,
             "day_of_week": self.day_of_week,
-            "start_time": self.start_time.strftime("%H:%M") if self.start_time else None,
-            "end_time": self.end_time.strftime("%H:%M") if self.end_time else None,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
             "slot_duration_minutes": self.slot_duration_minutes,
             "max_slots_per_day": self.max_slots_per_day,
             "is_active": self.is_active,
@@ -53,8 +69,6 @@ class LecturerAvailability(Base):
     
     def get_available_slots(self, target_date=None) -> list:
         """Get list of available time slots for a specific date"""
-        from datetime import datetime, timedelta
-        
         if not target_date:
             target_date = datetime.now().date()
         
@@ -64,15 +78,18 @@ class LecturerAvailability(Base):
         
         # Check if date is blocked
         date_str = target_date.strftime("%Y-%m-%d")
-        if date_str in (self.blocked_dates or []):
+        if date_str in self.blocked_dates:
             return []
         
         # Generate time slots
         slots = []
-        current_time = datetime.combine(target_date, self.start_time)
-        end_time = datetime.combine(target_date, self.end_time)
+        start_time = datetime.strptime(self.start_time, "%H:%M").time()
+        end_time = datetime.strptime(self.end_time, "%H:%M").time()
         
-        while current_time < end_time:
+        current_time = datetime.combine(target_date, start_time)
+        end_datetime = datetime.combine(target_date, end_time)
+        
+        while current_time < end_datetime:
             slots.append({
                 "time": current_time.strftime("%H:%M"),
                 "datetime": current_time.isoformat(),
@@ -82,41 +99,47 @@ class LecturerAvailability(Base):
         
         return slots
 
-class BookingSlot(Base):
+class BookingSlot(BaseDocument):
     """
     Store actual bookings/reservations
     """
-    __tablename__ = "booking_slots"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    lecturer_availability_id = Column(Integer, ForeignKey("lecturer_availability.id"), nullable=False)
-    user_id = Column(Integer, nullable=True)  # User who booked
+    lecturer_availability_id: PyObjectId = Field(..., description="Lecturer availability ID")
+    user_id: Optional[int] = Field(None, description="User who booked")
     
     # Booking details
-    booking_date = Column(Date, nullable=False)
-    booking_time = Column(Time, nullable=False)
-    duration_minutes = Column(Integer, default=30)
+    booking_date: str = Field(..., description="YYYY-MM-DD")
+    booking_time: str = Field(..., description="HH:MM")
+    duration_minutes: int = Field(default=30, description="Duration in minutes")
     
     # Status
-    status = Column(String(20), default="pending")  # pending, confirmed, cancelled
-    subject = Column(String(200), nullable=True)
-    notes = Column(Text, nullable=True)
+    status: str = Field(default="pending", max_length=20, description="pending, confirmed, cancelled")
+    subject: Optional[str] = Field(None, max_length=200, description="Subject")
+    notes: Optional[str] = Field(None, description="Notes")
     
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    lecturer_availability = relationship("LecturerAvailability", backref="bookings")
+    model_config = ConfigDict(
+        collection_name="booking_slots",
+        json_schema_extra={
+            "example": {
+                "lecturer_availability_id": "507f1f77bcf86cd799439011",
+                "user_id": 1,
+                "booking_date": "2024-01-15",
+                "booking_time": "09:00",
+                "duration_minutes": 30,
+                "status": "pending",
+                "subject": "Career Consultation",
+                "notes": "First meeting"
+            }
+        }
+    )
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses"""
         return {
-            "id": self.id,
-            "lecturer_availability_id": self.lecturer_availability_id,
+            "id": str(self.id),
+            "lecturer_availability_id": str(self.lecturer_availability_id),
             "user_id": self.user_id,
-            "booking_date": self.booking_date.strftime("%Y-%m-%d"),
-            "booking_time": self.booking_time.strftime("%H:%M"),
+            "booking_date": self.booking_date,
+            "booking_time": self.booking_time,
             "duration_minutes": self.duration_minutes,
             "status": self.status,
             "subject": self.subject,

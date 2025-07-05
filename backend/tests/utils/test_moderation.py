@@ -3,6 +3,8 @@
 import asyncio
 import sys
 import os
+import pytest
+from unittest.mock import Mock, patch
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
@@ -168,17 +170,25 @@ class TestSystemHealth:
             from app.models.user import User
             
             # Test model instantiation
-            lecturer = LecturerAvailability(
-                lecturer_id=1,
-                lecturer_name="Test",
-                day_of_week=1,
-                start_time="09:00",
-                end_time="17:00"
+            user = User(
+                email="test@example.com",
+                username="testuser",
+                full_name="Test User"
             )
             
-            assert hasattr(lecturer, 'to_dict'), "LecturerAvailability should have to_dict method"
+            conversation = Conversation(
+                user_id="test_user_id",
+                title="Test Conversation"
+            )
             
-            print("✅ Database models working correctly")
+            booking_slot = BookingSlot(
+                date="2024-01-01",
+                start_time="09:00",
+                end_time="10:00",
+                status="available"
+            )
+            
+            print("✅ All models can be instantiated")
             
         except Exception as e:
             print(f"❌ Database model test failed: {e}")

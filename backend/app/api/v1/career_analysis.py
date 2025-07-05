@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
 from app import crud
 from app.api import deps
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.post("/analyze", response_model=CareerAnalysisResponse)
 async def create_career_analysis(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     analysis_in: CareerAnalysisCreate,
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -29,7 +29,7 @@ async def create_career_analysis(
     try:
         # Create initial record in database
         career_analysis_record = crud.career_analysis.create_with_user(
-            db=db, obj_in=analysis_in, user_id=current_user.id
+            db=db, obj_in=analysis_in, user_id=str(current_user.id)
         )
         
         # Generate AI analysis using Gemini
@@ -64,7 +64,7 @@ async def create_career_analysis(
 @router.get("/my-analyses", response_model=List[CareerAnalysisResponse])
 def get_my_career_analyses(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
     skip: int = 0,
     limit: int = 10
@@ -73,7 +73,7 @@ def get_my_career_analyses(
     Get all career analyses for current user
     """
     analyses = crud.career_analysis.get_by_user(
-        db=db, user_id=current_user.id, skip=skip, limit=limit
+        db=db, user_id=str(current_user.id), skip=skip, limit=limit
     )
     return analyses
 
@@ -81,14 +81,14 @@ def get_my_career_analyses(
 @router.get("/latest", response_model=CareerAnalysisResponse)
 def get_latest_career_analysis(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
     """
     Get the most recent career analysis for current user
     """
     analysis = crud.career_analysis.get_latest_by_user(
-        db=db, user_id=current_user.id
+        db=db, user_id=str(current_user.id)
     )
     
     if not analysis:
@@ -103,8 +103,8 @@ def get_latest_career_analysis(
 @router.get("/{analysis_id}", response_model=CareerAnalysisResponse)
 def get_career_analysis(
     *,
-    db: Session = Depends(get_db),
-    analysis_id: int,
+    db: Database = Depends(get_db),
+    analysis_id: str,
     current_user: User = Depends(deps.get_current_user)
 ):
     """
@@ -119,7 +119,7 @@ def get_career_analysis(
         )
     
     # Check if analysis belongs to current user
-    if analysis.user_id != current_user.id:
+    if str(analysis.user_id) != str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -131,7 +131,7 @@ def get_career_analysis(
 @router.post("/chat")
 async def career_chat(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     chat_context: CareerChatContext,
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -148,7 +148,7 @@ async def career_chat(
         )
     
     # Check if analysis belongs to current user
-    if analysis.user_id != current_user.id:
+    if str(analysis.user_id) != str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

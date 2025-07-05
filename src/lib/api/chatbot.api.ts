@@ -41,7 +41,7 @@ interface Conversation {
 
 interface BookingConfirmRequest {
   conversation_id: number;
-  availability_id: number;
+  availability_id: string | number;
   lecturer_name: string;
   date: string;
   time: string;

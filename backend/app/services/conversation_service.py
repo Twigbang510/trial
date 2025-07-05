@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, List
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from fastapi import HTTPException
 from app.crud.crud_conversation import conversation, message
 from app.schemas.conversation import ConversationCreate, MessageCreate, ConversationUpdate
@@ -14,8 +14,8 @@ class ConversationService:
     
     @staticmethod
     def get_or_create_conversation(
-        db: Session, 
-        conversation_id: Optional[int], 
+        db: Database, 
+        conversation_id: Optional[str], 
         user: Optional[User], 
         context: str = "consultant"
     ):
@@ -27,7 +27,7 @@ class ConversationService:
             return conv
         else:
             conv_data = ConversationCreate(
-                user_id=getattr(user, 'id') if user else None,
+                user_id=str(getattr(user, 'id')) if user else None,
                 context=context
             )
             return conversation.create(db, obj_in=conv_data)
@@ -35,7 +35,7 @@ class ConversationService:
     @staticmethod
     def validate_conversation_access(conv, user: Optional[User]) -> None:
         """Validate user access to conversation"""
-        if user and getattr(conv, 'user_id') and int(getattr(conv, 'user_id')) != int(getattr(user, 'id')):
+        if user and getattr(conv, 'user_id') and str(getattr(conv, 'user_id')) != str(getattr(user, 'id')):
             raise HTTPException(status_code=403, detail="Access denied")
     
     @staticmethod
@@ -44,7 +44,7 @@ class ConversationService:
         return getattr(conv, 'booking_status') == 'complete'
     
     @staticmethod
-    def save_user_message(db: Session, content: str, conversation_id: int):
+    def save_user_message(db: Database, content: str, conversation_id: str):
         """Save user message to database"""
         user_message = MessageCreate(
             content=content,
@@ -54,7 +54,7 @@ class ConversationService:
         return message.create(db, obj_in=user_message, conversation_id=conversation_id)
     
     @staticmethod
-    def save_bot_message(db: Session, content: str, conversation_id: int):
+    def save_bot_message(db: Database, content: str, conversation_id: str):
         """Save bot message to database"""
         bot_message = MessageCreate(
             content=content,
@@ -64,7 +64,7 @@ class ConversationService:
         return message.create(db, obj_in=bot_message, conversation_id=conversation_id)
     
     @staticmethod
-    def get_conversation_history(db: Session, conversation_id: int) -> List:
+    def get_conversation_history(db: Database, conversation_id: str) -> List:
         """Get conversation message history"""
         db_messages = message.get_by_conversation(db, conversation_id=conversation_id)
         return db_messages[:-1] if db_messages else []
@@ -75,7 +75,7 @@ class ConversationService:
         return ChatHistoryManager.should_stop_conversation(conv, future_bot_count)
     
     @staticmethod
-    def abandon_conversation(db: Session, conv) -> str:
+    def abandon_conversation(db: Database, conv) -> str:
         """Mark conversation as abandoned and return stop message"""
         if getattr(conv, 'booking_status') != "abandoned":
             setattr(conv, 'booking_status', "abandoned")
@@ -84,14 +84,14 @@ class ConversationService:
         return ChatHistoryManager.get_stop_message()
     
     @staticmethod
-    def update_conversation_title(db: Session, conv, first_message: str) -> None:
+    def update_conversation_title(db: Database, conv, first_message: str) -> None:
         """Update conversation title if not set"""
         if not getattr(conv, 'title'):
             title = first_message[:50] + "..." if len(first_message) > 50 else first_message
             conversation.update(db, db_obj=conv, obj_in=ConversationUpdate(title=title))
     
     @staticmethod
-    def increment_bot_response_count(db: Session, conv) -> None:
+    def increment_bot_response_count(db: Database, conv) -> None:
         """Increment bot response count for conversation"""
         ChatHistoryManager.increment_bot_response_count(db, conv)
     
@@ -101,6 +101,6 @@ class ConversationService:
         return ChatHistoryManager.convert_messages_to_history_string(historical_messages)
     
     @staticmethod
-    def update_conversation_status(db: Session, conv, user_message: str, conversation_history: str) -> None:
+    def update_conversation_status(db: Database, conv, user_message: str, conversation_history: str) -> None:
         """Update conversation status based on user message"""
         ChatHistoryManager.update_conversation_status(db, conv, user_message, conversation_history) 

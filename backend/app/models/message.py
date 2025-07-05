@@ -1,18 +1,28 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from app.db.base import Base
+from typing import Optional
+from pydantic import Field, ConfigDict
+from app.db.base import BaseDocument, PyObjectId
 
-class Message(Base):
-    __tablename__ = "messages"
-
-    id = Column(Integer, primary_key=True, index=True)
-    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    content = Column(Text, nullable=False)
-    sender = Column(String(20), nullable=False)  # 'user' or 'bot'
-    is_appropriate = Column(Boolean, default=True)  # For context control
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+class Message(BaseDocument):
+    conversation_id: PyObjectId = Field(..., description="Conversation ID")
+    content: str = Field(..., description="Message content")
+    sender: str = Field(..., max_length=20, description="'user' or 'bot'")
+    is_appropriate: bool = Field(default=True, description="For context control")
     
-    # Relationships
-    conversation = relationship("Conversation", back_populates="messages")
-    booking_analysis = relationship("BookingAnalysis", back_populates="message", uselist=False, cascade="all, delete-orphan") 
+    model_config = ConfigDict(
+        collection_name="messages",
+        json_schema_extra={
+            "example": {
+                "conversation_id": "507f1f77bcf86cd799439011",
+                "content": "Hello, how can I help you?",
+                "sender": "bot",
+                "is_appropriate": True
+            }
+        }
+    )
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary with string IDs"""
+        data = self.model_dump()
+        data["id"] = str(self.id)
+        data["conversation_id"] = str(self.conversation_id)
+        return data 

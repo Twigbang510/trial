@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from typing import List, Optional
 from app.api.deps import get_db, get_current_user
 from app.models.user import User as UserModel
@@ -10,23 +10,24 @@ from app.crud.crud_lecturer_availability import lecturer_availability
 router = APIRouter()
 
 @router.get("/", response_model=list[UserOut])
-def get_users(db: Session = Depends(get_db)):
-    return db.query(UserModel).all()
+def get_users(db: Database = Depends(get_db)):
+    users = user_crud.get_list(db, limit=100)
+    return [UserOut(**user.model_dump()) for user in users]
 
 @router.get("/me", response_model=UserOut)
 def read_user_me(
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
     """
     Get current user.
     """
-    return current_user
+    return UserOut(**current_user.model_dump())
 
 @router.put("/me", response_model=UserOut)
 def update_user_me(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     user_in: UserUpdate,
     current_user: UserModel = Depends(get_current_user),
 ):
@@ -34,12 +35,12 @@ def update_user_me(
     Update own user.
     """
     user = user_crud.update(db, db_obj=current_user, obj_in=user_in)
-    return user
+    return UserOut(**user.model_dump())
 
 @router.get("/me/bookings")
 def get_my_bookings(
     *,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
     status: Optional[str] = None,
     limit: int = 50
@@ -53,7 +54,7 @@ def get_my_bookings(
     
     bookings = lecturer_availability.get_user_bookings(
         db=db, 
-        user_id=current_user.id, 
+        user_id=str(current_user.id), 
         status_filter=status_filter,
         limit=limit
     )

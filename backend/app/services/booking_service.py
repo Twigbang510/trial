@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from fastapi import HTTPException
 from datetime import datetime
 from app.crud import lecturer_availability
@@ -15,8 +15,8 @@ class BookingService:
     
     @staticmethod
     def create_booking_slot(
-        db: Session,
-        availability_id: int,
+        db: Database,
+        availability_id: str,
         user: Optional[User],
         booking_date: str,
         booking_time: str,
@@ -27,7 +27,7 @@ class BookingService:
             booking_slot = lecturer_availability.create_booking_slot(
                 db=db,
                 availability_id=availability_id,
-                user_id=getattr(user, 'id') if user else None,
+                user_id=str(getattr(user, 'id')) if user else None,
                 booking_date=booking_date,
                 booking_time=booking_time,
                 subject=subject,
@@ -39,7 +39,7 @@ class BookingService:
             return False
     
     @staticmethod
-    def complete_conversation(db: Session, conv_id: int) -> None:
+    def complete_conversation(db: Database, conv_id: str) -> None:
         """Mark conversation as complete"""
         conv = conversation.get(db, id=conv_id)
         if conv:

@@ -15,8 +15,6 @@ export const AppointmentList = ({ activeTab }: AppointmentListProps) => {
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
 
-  // Debug state changes
-  console.log('AppointmentList render - bookings:', bookings, 'loading:', loading, 'error:', error);
 
   const fetchBookings = async () => {
     try {
@@ -108,7 +106,6 @@ export const AppointmentList = ({ activeTab }: AppointmentListProps) => {
   };
 
   // Filter bookings based on active tab
-  console.log('Bookings state:', bookings);
   const filteredBookings = (bookings || []).filter(booking => {
     const bookingDate = new Date(booking.booking_date);
     const today = new Date();
@@ -127,7 +124,6 @@ export const AppointmentList = ({ activeTab }: AppointmentListProps) => {
 
   // Safety check for bookings state
   if (bookings === undefined || bookings === null) {
-    console.log('Bookings is undefined/null, returning loading state');
     return (
       <div className="flex-1 p-4 md:p-6 md:ml-4">
         <div className="flex items-center justify-center py-12">

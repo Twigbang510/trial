@@ -1,5 +1,5 @@
 from typing import List, Dict, Text, Optional
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from app.models.conversation import Conversation
 from app.models.message import Message
 import logging
@@ -91,7 +91,7 @@ class ChatHistoryManager:
     
     @staticmethod
     def update_conversation_status(
-        db: Session, 
+        db: Database, 
         conversation: Conversation, 
         user_message: str, 
         conversation_history: str
@@ -104,12 +104,10 @@ class ChatHistoryManager:
             setattr(conversation, 'booking_status', 'completed')
             logger.info(f"Conversation {getattr(conversation, 'id', None)} marked as completed booking")
         
-        db.commit()
-        db.refresh(conversation)
         return conversation
     
     @staticmethod
-    def increment_bot_response_count(db: Session, conversation: Conversation) -> Conversation:
+    def increment_bot_response_count(db: Database, conversation: Conversation) -> Conversation:
         """
         Increment bot response count after generating AI response
         """
@@ -121,8 +119,6 @@ class ChatHistoryManager:
             setattr(conversation, 'booking_status', 'abandoned')
             logger.info(f"Conversation {getattr(conversation, 'id', None)} marked as abandoned after {getattr(conversation, 'bot_response_count', 0)} responses")
         
-        db.commit()
-        db.refresh(conversation)
         return conversation
     
     @staticmethod

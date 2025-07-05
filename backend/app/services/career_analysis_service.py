@@ -57,7 +57,7 @@ class CareerAnalysisService:
     
     def _calculate_holland_code(self, holland_scores: HollandScores) -> str:
         """Calculate Holland code from scores"""
-        scores_dict = holland_scores.dict()
+        scores_dict = holland_scores.model_dump()
         
         # Sort by score (highest first)
         sorted_scores = sorted(scores_dict.items(), key=lambda x: x[1], reverse=True)
@@ -80,7 +80,7 @@ class CareerAnalysisService:
     def _create_analysis_prompt(self, mbti_type: str, holland_scores: HollandScores, holland_code: str) -> str:
         """Create comprehensive prompt for Gemini analysis"""
         
-        holland_dict = holland_scores.dict()
+        holland_dict = holland_scores.model_dump()
         
         prompt = f"""
         You are a professional career counselor and psychologist. Analyze this person's career path based on their personality assessments:

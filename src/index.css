@@ -43,17 +43,6 @@
   width: auto !important;
 }
 
-.poi-popup {
-  padding: 4px 8px;
-  white-space: nowrap;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.poi-popup strong {
-  display: block;
-  color: #1a1a1a;
-}
 
 /*USER MARKER STYLE*/
 .user-marker {

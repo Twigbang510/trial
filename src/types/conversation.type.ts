@@ -91,7 +91,7 @@ export interface BookingOption {
   subject: string;
   location: string;
   duration_minutes: number;
-  availability_id: number;
+  availability_id: string | number;
 }
 
 export interface MessageType {

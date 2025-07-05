@@ -1,12 +1,14 @@
 from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
-
+from datetime import datetime
+from bson import ObjectId
+from pymongo.database import Database
+from pymongo.collection import Collection
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.db.base import Base
+from app.db.base import BaseDocument
 
-ModelType = TypeVar("ModelType", bound=Base)
+ModelType = TypeVar("ModelType", bound=BaseDocument)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
@@ -18,50 +20,95 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         **Parameters**
 
-        * `model`: A SQLAlchemy model class
+        * `model`: A Pydantic model class
         * `schema`: A Pydantic model (schema) class
         """
         self.model = model
 
-    def get(self, db: Session, id: Any) -> Optional[ModelType]:
-        return db.query(self.model).filter(self.model.id == id).first()
+    def get_collection(self, db: Database) -> Collection:
+        """Get MongoDB collection for this model"""
+        collection_name = self.model.model_config.get("collection_name", "default")
+        return db[collection_name]
+
+    def get(self, db: Database, id: Any) -> Optional[ModelType]:
+        if isinstance(id, str):
+            try:
+                id = ObjectId(id)
+            except:
+                return None
+        collection = self.get_collection(db)
+        result = collection.find_one({"_id": id})
+        if result:
+            # Convert ObjectId to string for the id field
+            result["id"] = str(result["_id"])
+            return self.model(**result)
+        return None
 
     def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Database, *, skip: int = 0, limit: int = 100
     ) -> List[ModelType]:
-        return db.query(self.model).offset(skip).limit(limit).all()
+        collection = self.get_collection(db)
+        cursor = collection.find().skip(skip).limit(limit)
+        models = []
+        for doc in cursor:
+            # Convert ObjectId to string for the id field
+            doc["id"] = str(doc["_id"])
+            models.append(self.model(**doc))
+        return models
 
-    def create(self, db: Session, *, obj_in: CreateSchemaType) -> ModelType:
+    def create(self, db: Database, *, obj_in: CreateSchemaType) -> ModelType:
         obj_in_data = jsonable_encoder(obj_in)
-        db_obj = self.model(**obj_in_data)  # type: ignore
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        obj_in_data["created_at"] = datetime.utcnow()
+        obj_in_data["updated_at"] = datetime.utcnow()
+        
+        collection = self.get_collection(db)
+        result = collection.insert_one(obj_in_data)
+        
+        # Get the created document
+        created_doc = collection.find_one({"_id": result.inserted_id})
+        created_doc["id"] = str(created_doc["_id"])
+        return self.model(**created_doc)
 
     def update(
         self,
-        db: Session,
+        db: Database,
         *,
         db_obj: ModelType,
         obj_in: Union[UpdateSchemaType, Dict[str, Any]]
     ) -> ModelType:
-        obj_data = jsonable_encoder(db_obj)
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
-            update_data = obj_in.dict(exclude_unset=True)
-        for field in obj_data:
-            if field in update_data:
-                setattr(db_obj, field, update_data[field])
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+            update_data = obj_in.model_dump(exclude_unset=True)
+        
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Convert string id back to ObjectId for MongoDB query
+        doc_id = ObjectId(db_obj.id) if isinstance(db_obj.id, str) else db_obj.id
+        
+        collection = self.get_collection(db)
+        collection.update_one(
+            {"_id": doc_id},
+            {"$set": update_data}
+        )
+        
+        # Get the updated document
+        updated_doc = collection.find_one({"_id": doc_id})
+        updated_doc["id"] = str(updated_doc["_id"])
+        return self.model(**updated_doc)
 
-    def remove(self, db: Session, *, id: int) -> ModelType:
-        obj = db.query(self.model).get(id)
-        db.delete(obj)
-        db.commit()
-        return obj 
+    def remove(self, db: Database, *, id: Any) -> Optional[ModelType]:
+        if isinstance(id, str):
+            try:
+                id = ObjectId(id)
+            except:
+                return None
+        
+        collection = self.get_collection(db)
+        doc = collection.find_one({"_id": id})
+        if doc:
+            collection.delete_one({"_id": id})
+            doc["id"] = str(doc["_id"])
+            return self.model(**doc)
+        return None 
  

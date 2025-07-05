@@ -1,34 +1,48 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from datetime import datetime
+from typing import Optional, Dict, List, Any
+from pydantic import Field, ConfigDict
+from app.db.base import BaseDocument, PyObjectId
 
-from app.db.base import Base
-
-
-class CareerAnalysis(Base):
-    __tablename__ = "career_analyses"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+class CareerAnalysis(BaseDocument):
+    user_id: PyObjectId = Field(..., description="User ID")
     
     # Test inputs
-    mbti_type = Column(String(4), nullable=False)  # e.g., "ESFP"
-    holland_scores = Column(JSON, nullable=False)  # {"realistic": 85, "investigative": 45, ...}
+    mbti_type: str = Field(..., max_length=4, description="e.g., 'ESFP'")
+    holland_scores: Dict[str, int] = Field(..., description='{"realistic": 85, "investigative": 45, ...}')
     
     # AI Analysis results
-    personality_summary = Column(Text)
-    holland_code = Column(String(6))  # e.g., "RIA"
-    career_suggestions = Column(JSON)  # Array of career objects
-    personality_traits = Column(JSON)  # Array of traits
-    strengths = Column(JSON)  # Array of strengths
-    growth_areas = Column(JSON)  # Array of growth areas
+    personality_summary: Optional[str] = Field(None, description="Personality summary")
+    holland_code: Optional[str] = Field(None, max_length=6, description="e.g., 'RIA'")
+    career_suggestions: Optional[List[Dict[str, Any]]] = Field(None, description="Array of career objects")
+    personality_traits: Optional[List[str]] = Field(None, description="Array of traits")
+    strengths: Optional[List[str]] = Field(None, description="Array of strengths")
+    growth_areas: Optional[List[str]] = Field(None, description="Array of growth areas")
     
     # AI Generated content
-    detailed_analysis = Column(Text)  # Full AI analysis text
-    recommendations = Column(Text)  # AI recommendations
+    detailed_analysis: Optional[str] = Field(None, description="Full AI analysis text")
+    recommendations: Optional[str] = Field(None, description="AI recommendations")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    model_config = ConfigDict(
+        collection_name="career_analyses",
+        json_schema_extra={
+            "example": {
+                "user_id": "507f1f77bcf86cd799439011",
+                "mbti_type": "ESFP",
+                "holland_scores": {"realistic": 85, "investigative": 45},
+                "personality_summary": "You are an outgoing person...",
+                "holland_code": "RIA",
+                "career_suggestions": [{"title": "Engineer", "description": "..."}],
+                "personality_traits": ["Outgoing", "Practical"],
+                "strengths": ["Communication", "Problem-solving"],
+                "growth_areas": ["Patience", "Detail-orientation"],
+                "detailed_analysis": "Detailed analysis text...",
+                "recommendations": "Recommendations text..."
+            }
+        }
+    )
     
-    # Relationships
-    user = relationship("User", back_populates="career_analyses") 
+    def to_dict(self) -> dict:
+        """Convert to dictionary with string IDs"""
+        data = self.model_dump()
+        data["id"] = str(self.id)
+        data["user_id"] = str(self.user_id)
+        return data 

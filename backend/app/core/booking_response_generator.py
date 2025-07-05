@@ -90,7 +90,7 @@ Respond with a JSON object containing BOTH analysis and response:
             ai_response = ai_result.get("response", {})
             
             booking_options = []
-            if ai_response.get("needs_availability_check") and db_session:
+            if ai_response.get("needs_availability_check") and db_session is not None:
                 booking_options = await self._find_booking_options(analysis, db_session)
             
             enhanced_response = self._enhance_response_with_options(

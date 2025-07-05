@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 from datetime import datetime
 from enum import Enum
@@ -30,16 +30,15 @@ class UserUpdate(UserBase):
 
 # Additional properties to return via API
 class User(UserBase):
-    id: int
-    created_at: datetime
+    id: Optional[str] = None
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Separate schemas for different purposes
 class UserOut(BaseModel):
-    id: int
+    id: str
     email: str
     username: str
     full_name: Optional[str] = None
@@ -47,11 +46,10 @@ class UserOut(BaseModel):
     is_verified: bool
     status: UserStatus
     violation_count: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserLogin(BaseModel):
     email: EmailStr

@@ -7,7 +7,8 @@ class Settings:
     def __init__(self):
         self.PROJECT_NAME: str = os.getenv("PROJECT_NAME")
         self.SECRET_KEY: str = os.getenv("SECRET_KEY")
-        self.DATABASE_URL: str = os.getenv("DATABASE_URL")
+        self.MONGODB_URL: str = os.getenv("MONGODB_URL")
+        self.MONGODB_DB_NAME: str = os.getenv("MONGODB_DB_NAME", "trial_webapp")
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
 
         # Email config
@@ -36,7 +37,6 @@ class Settings:
         # Validate required environment variables
         required_vars = [
             "SECRET_KEY",
-            "DATABASE_URL", 
             "SMTP_USERNAME",
             "SMTP_PASSWORD",
             "FROM_EMAIL",

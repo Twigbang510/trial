@@ -1,5 +1,5 @@
 from typing import Optional, Dict, List, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
 
@@ -28,7 +28,7 @@ class CareerAnalysisCreate(BaseModel):
 
 
 class CareerAnalysisResponse(BaseModel):
-    id: int
+    id: str
     mbti_type: str
     holland_scores: Dict[str, int]
     holland_code: Optional[str]
@@ -41,8 +41,7 @@ class CareerAnalysisResponse(BaseModel):
     recommendations: Optional[str]
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CareerAnalysisUpdate(BaseModel):
@@ -52,6 +51,6 @@ class CareerAnalysisUpdate(BaseModel):
 
 class CareerChatContext(BaseModel):
     """Context for career-related chat interactions"""
-    analysis_id: int
+    analysis_id: str
     user_question: str
     focus_area: Optional[str] = None  # "careers", "education", "skills", etc. 

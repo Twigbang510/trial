@@ -1,62 +1,102 @@
 # CRUD functions for user (template)
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 from typing import Optional, Union, Dict, Any
+from bson import ObjectId
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_password_hash, verify_password
 
 class CRUDUser:
-    def get(self, db: Session, id: int) -> Optional[User]:
-        return db.query(User).filter(User.id == id).first()
+    def get(self, db: Database, id: Any) -> Optional[User]:
+        if isinstance(id, str):
+            try:
+                id = ObjectId(id)
+            except:
+                return None
+        collection = db.users
+        result = collection.find_one({"_id": id})
+        if result:
+            # Convert ObjectId to string for the id field
+            result["id"] = str(result["_id"])
+            return User(**result)
+        return None
 
-    def get_by_email(self, db: Session, email: str) -> Optional[User]:
-        return db.query(User).filter(User.email == email).first()
+    def get_by_email(self, db: Database, email: str) -> Optional[User]:
+        collection = db.users
+        result = collection.find_one({"email": email})
+        if result:
+            # Convert ObjectId to string for the id field
+            result["id"] = str(result["_id"])
+            return User(**result)
+        return None
 
-    def get_by_username(self, db: Session, *, username: str) -> Optional[User]:
-        return db.query(User).filter(User.username == username).first()
+    def get_by_username(self, db: Database, *, username: str) -> Optional[User]:
+        collection = db.users
+        result = collection.find_one({"username": username})
+        if result:
+            # Convert ObjectId to string for the id field
+            result["id"] = str(result["_id"])
+            return User(**result)
+        return None
 
-    def get_list(self, db: Session, skip: int = 0, limit: int = 100):
-        return db.query(User).offset(skip).limit(limit).all()
+    def get_list(self, db: Database, skip: int = 0, limit: int = 100):
+        collection = db.users
+        cursor = collection.find().skip(skip).limit(limit)
+        users = []
+        for doc in cursor:
+            # Convert ObjectId to string for the id field
+            doc["id"] = str(doc["_id"])
+            users.append(User(**doc))
+        return users
 
-    def create(self, db: Session, *, obj_in: UserCreate) -> User:
-        db_obj = User(
-            email=obj_in.email,
-            username=obj_in.username,
-            full_name=obj_in.full_name,
-            hashed_password=get_password_hash(obj_in.password),
-            is_active=True,
-            is_verified=False,
-            status=obj_in.status,
-            violation_count=0
-        )
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+    def create(self, db: Database, *, obj_in: UserCreate) -> User:
+        user_data = {
+            "email": obj_in.email,
+            "username": obj_in.username,
+            "full_name": obj_in.full_name,
+            "hashed_password": get_password_hash(obj_in.password),
+            "is_active": True,
+            "is_verified": False,
+            "status": obj_in.status,
+            "violation_count": 0
+        }
+        
+        collection = db.users
+        result = collection.insert_one(user_data)
+        
+        # Get the created user
+        created_user = collection.find_one({"_id": result.inserted_id})
+        created_user["id"] = str(created_user["_id"])
+        return User(**created_user)
 
     def update(
-        self, db: Session, *, db_obj: User, obj_in: Union[UserUpdate, Dict[str, Any]]
+        self, db: Database, *, db_obj: User, obj_in: Union[UserUpdate, Dict[str, Any]]
     ) -> User:
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
-            update_data = obj_in.dict(exclude_unset=True)
+            update_data = obj_in.model_dump(exclude_unset=True)
         
         if "password" in update_data:
             hashed_password = get_password_hash(update_data["password"])
             del update_data["password"]
             update_data["hashed_password"] = hashed_password
-            
-        for field, value in update_data.items():
-            if hasattr(db_obj, field):
-                setattr(db_obj, field, value)
         
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        # Convert string id back to ObjectId for MongoDB query
+        user_id = ObjectId(db_obj.id) if isinstance(db_obj.id, str) else db_obj.id
+        
+        collection = db.users
+        collection.update_one(
+            {"_id": user_id},
+            {"$set": update_data}
+        )
+        
+        # Get the updated user
+        updated_user = collection.find_one({"_id": user_id})
+        updated_user["id"] = str(updated_user["_id"])
+        return User(**updated_user)
 
-    def authenticate(self, db: Session, *, email: str, password: str) -> Optional[User]:
+    def authenticate(self, db: Database, *, email: str, password: str) -> Optional[User]:
         user = self.get_by_email(db, email=email)
         if not user:
             return None
@@ -70,7 +110,7 @@ class CRUDUser:
     def is_verified(self, user: User) -> bool:
         return bool(user.is_verified)
     
-    def increment_violation(self, db: Session, *, user: User, violation_type: str = "WARNING") -> User:
+    def increment_violation(self, db: Database, *, user: User, violation_type: str = "WARNING") -> User:
         """
         Increment user's violation count and deactivate if threshold is reached
         
@@ -83,18 +123,29 @@ class CRUDUser:
             Updated user object
         """
         current_count = getattr(user, 'violation_count', 0) or 0
-        setattr(user, 'violation_count', current_count + 1)
+        new_count = current_count + 1
+        
+        update_data = {"violation_count": new_count}
         
         # Deactivate user if they have 5 or more violations
-        if getattr(user, 'violation_count', 0) >= 5:
-            setattr(user, 'is_active', False)
-            
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
+        if new_count >= 5:
+            update_data["is_active"] = False
+        
+        # Convert string id back to ObjectId for MongoDB query
+        user_id = ObjectId(user.id) if isinstance(user.id, str) else user.id
+        
+        collection = db.users
+        collection.update_one(
+            {"_id": user_id},
+            {"$set": update_data}
+        )
+        
+        # Get the updated user
+        updated_user = collection.find_one({"_id": user_id})
+        updated_user["id"] = str(updated_user["_id"])
+        return User(**updated_user)
     
-    def reset_violations(self, db: Session, *, user: User) -> User:
+    def reset_violations(self, db: Database, *, user: User) -> User:
         """
         Reset user's violation count (admin function)
         
@@ -105,12 +156,18 @@ class CRUDUser:
         Returns:
             Updated user object
         """
-        setattr(user, 'violation_count', 0)
-        setattr(user, 'is_active', True)
+        # Convert string id back to ObjectId for MongoDB query
+        user_id = ObjectId(user.id) if isinstance(user.id, str) else user.id
         
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
+        collection = db.users
+        collection.update_one(
+            {"_id": user_id},
+            {"$set": {"violation_count": 0, "is_active": True}}
+        )
+        
+        # Get the updated user
+        updated_user = collection.find_one({"_id": user_id})
+        updated_user["id"] = str(updated_user["_id"])
+        return User(**updated_user)
 
 user_crud = CRUDUser() 

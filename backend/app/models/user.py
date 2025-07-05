@@ -1,28 +1,42 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-import enum
-from app.db.base import Base
+from typing import Optional
+from datetime import datetime
+from enum import Enum
+from pydantic import Field, EmailStr, ConfigDict
+from app.db.base import BaseDocument, PyObjectId
 
-class UserStatus(enum.Enum):
+class UserStatus(str, Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     SCHEDULED = "SCHEDULED"
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(64), unique=True, index=True, nullable=True)
-    full_name = Column(String(255), nullable=True)
-    hashed_password = Column(String(255), nullable=False)
-    is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
-    status = Column(SQLEnum(UserStatus), default=UserStatus.PENDING, nullable=False)
-    violation_count = Column(Integer, default=0)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+class User(BaseDocument):
+    email: EmailStr = Field(..., description="User email address")
+    username: Optional[str] = Field(None, max_length=64, description="Username")
+    full_name: Optional[str] = Field(None, max_length=255, description="Full name")
+    hashed_password: str = Field(..., max_length=255, description="Hashed password")
+    is_active: bool = Field(default=True, description="User active status")
+    is_verified: bool = Field(default=False, description="Email verification status")
+    status: UserStatus = Field(default=UserStatus.PENDING, description="User status")
+    violation_count: int = Field(default=0, description="Number of violations")
     
-    # Relationships
-    conversations = relationship("Conversation", back_populates="user")
-    career_analyses = relationship("CareerAnalysis", back_populates="user") 
+    model_config = ConfigDict(
+        collection_name="users",
+        json_schema_extra={
+            "example": {
+                "email": "user@example.com",
+                "username": "username",
+                "full_name": "Full Name",
+                "hashed_password": "hashed_password",
+                "is_active": True,
+                "is_verified": False,
+                "status": "PENDING",
+                "violation_count": 0
+            }
+        }
+    )
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary with string IDs"""
+        data = self.model_dump()
+        data["id"] = str(self.id)
+        return data 

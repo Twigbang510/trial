@@ -52,7 +52,7 @@ class LocalModerationModels:
         self.tokenizers = {}
         self.pipelines = {}
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Using device: {self.device}")
+        print(f"Using device: {self.device}")
         
         # Load models based on configuration
         self._load_models()
@@ -77,7 +77,6 @@ class LocalModerationModels:
             
         except Exception as e:
             logger.error(f"Error loading models: {str(e)}")
-            # Ensure keyword patterns are loaded if nothing else works
             if not hasattr(self, 'keyword_patterns'):
                 self._load_minimal_fallback()
     
@@ -85,80 +84,74 @@ class LocalModerationModels:
         """Load Vietnamese-specific models"""
         try:
             # Load ViHateT5 or similar Vietnamese hate speech model
-            model_name = "VietAI/vihate-t5-base"  # Placeholder - use actual model
-            # For now, use a general approach
+            model_name = "VietAI/vihate-t5-base"
             self.pipelines['vietnamese'] = pipeline(
                 "text-classification",
                 model="distilbert-base-multilingual-cased",
                 device=0 if self.device == "cuda" else -1,
-                top_k=None  # Return all scores instead of deprecated return_all_scores
+                top_k=None
             )
-            logger.info("Vietnamese model loaded successfully")
+            print("Vietnamese model loaded successfully")
         except Exception as e:
             logger.warning(f"Could not load Vietnamese model: {str(e)}")
     
     def _load_multilingual_models(self):
         """Load multilingual models"""
         try:
-            # Load toxic-bert for multilingual toxicity detection
             model_name = "unitary/toxic-bert"
             self.pipelines['toxic_bert'] = pipeline(
                 "text-classification",
                 model=model_name,
                 device=0 if self.device == "cuda" else -1,
-                top_k=None  # Return all scores instead of deprecated return_all_scores
+                top_k=None
             )
-            logger.info("Toxic-BERT model loaded successfully")
+            print("Toxic-BERT model loaded successfully")
         except Exception as e:
             logger.warning(f"Could not load Toxic-BERT: {str(e)}")
             
         try:
-            # Load multilingual DistilBERT
             model_name = "distilbert-base-multilingual-cased"
             self.pipelines['multilingual'] = pipeline(
                 "text-classification",
                 model=model_name,
                 device=0 if self.device == "cuda" else -1,
-                top_k=None  # Return all scores instead of deprecated return_all_scores
+                top_k=None
             )
-            logger.info("Multilingual DistilBERT loaded successfully")
+            print("Multilingual DistilBERT loaded successfully")
         except Exception as e:
             logger.warning(f"Could not load multilingual DistilBERT: {str(e)}")
     
     def _load_english_models(self):
         """Load English-specific models"""
         try:
-            # Load specialized English toxicity model
             model_name = "martin-ha/toxic-comment-model"
             self.pipelines['toxic_comment'] = pipeline(
                 "text-classification",
                 model=model_name,
                 device=0 if self.device == "cuda" else -1,
-                top_k=None  # Return all scores instead of deprecated return_all_scores
+                top_k=None
             )
-            logger.info("Toxic comment model loaded successfully")
+            print("Toxic comment model loaded successfully")
         except Exception as e:
             logger.warning(f"Could not load toxic comment model: {str(e)}")
     
     def _load_fallback_models(self):
         """Load fallback models"""
         try:
-            # Load lightweight model for fallback
             model_name = "cardiffnlp/twitter-roberta-base-offensive"
             self.pipelines['offensive'] = pipeline(
                 "text-classification",
                 model=model_name,
                 device=0 if self.device == "cuda" else -1,
-                top_k=None  # Return all scores instead of deprecated return_all_scores
+                top_k=None
             )
-            logger.info("Offensive language model loaded successfully")
+            print("Offensive language model loaded successfully")
         except Exception as e:
             logger.warning(f"Could not load offensive model: {str(e)}")
     
     def _load_minimal_fallback(self):
         """Load minimal fallback when other models fail"""
         try:
-            # Always load keyword patterns for fallback
             self.keyword_patterns = {
                 'hate': ['hate', 'nazi', 'terrorist', 'kill', 'murder', 'death', 'violence'],
                 'harassment': ['stupid', 'idiot', 'moron', 'ugly', 'fat', 'loser', 'freak'],
@@ -172,14 +165,13 @@ class LocalModerationModels:
                     'xấu', 'béo', 'gầy', 'ngu', 'dốt', 'đần', 'ngốc', 'khùng', 'điên'
                 ]
             }
-            logger.info("Minimal keyword fallback loaded")
+            print("Minimal keyword fallback loaded")
         except Exception as e:
             logger.error(f"Even minimal fallback failed: {str(e)}")
 
     @lru_cache(maxsize=1000)
     def _detect_language(self, text: str) -> str:
         """Detect language of input text"""
-        # Simple language detection based on character patterns
         vietnamese_chars = set('àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ')
         
         if any(char.lower() in vietnamese_chars for char in text):
@@ -194,26 +186,20 @@ class LocalModerationModels:
         try:
             results = self.pipelines['vietnamese'](text)
             
-            # Parse results - handle different output formats
             negative_score = 0.0
             
-            # Handle different pipeline output formats
             if isinstance(results, list) and len(results) > 0:
-                # If results is a list of predictions
                 for result in results:
                     if isinstance(result, dict) and 'label' in result and 'score' in result:
                         if result['label'] in ['NEGATIVE', 'TOXIC', 'HATE', 'toxic', 'hate', '1', 1]:
                             negative_score = max(negative_score, result['score'])
             elif isinstance(results, dict):
-                # If results is a single prediction dict
                 if results.get('label') in ['NEGATIVE', 'TOXIC', 'HATE', 'toxic', 'hate', '1', 1]:
                     negative_score = results.get('score', 0.0)
             else:
-                # Fallback
                 logger.warning(f"Unexpected vietnamese output format: {type(results)} - {results}")
                 negative_score = 0.0
             
-            # Boost score for Vietnamese hate patterns
             text_lower = text.lower()
             if hasattr(self, 'keyword_patterns'):
                 vietnamese_hate_matches = sum(1 for word in self.keyword_patterns.get('vietnamese_hate', []) 
@@ -255,22 +241,17 @@ class LocalModerationModels:
         try:
             results = self.pipelines['toxic_bert'](text)
             
-            # Parse results - handle different output formats
             toxic_score = 0.0
             
-            # Handle different pipeline output formats
             if isinstance(results, list) and len(results) > 0:
-                # If results is a list of predictions
                 for result in results:
                     if isinstance(result, dict) and 'label' in result and 'score' in result:
                         if result['label'] in ['TOXIC', 'toxic', '1', 1]:
                             toxic_score = max(toxic_score, result['score'])
             elif isinstance(results, dict):
-                # If results is a single prediction dict
                 if results.get('label') in ['TOXIC', 'toxic', '1', 1]:
                     toxic_score = results.get('score', 0.0)
             else:
-                # Fallback: try to find any positive toxicity indicators
                 logger.warning(f"Unexpected toxic_bert output format: {type(results)} - {results}")
                 toxic_score = 0.0
             
@@ -308,22 +289,17 @@ class LocalModerationModels:
         try:
             results = self.pipelines['multilingual'](text)
             
-            # Parse results - handle different output formats
             negative_score = 0.0
             
-            # Handle different pipeline output formats
             if isinstance(results, list) and len(results) > 0:
-                # If results is a list of predictions
                 for result in results:
                     if isinstance(result, dict) and 'label' in result and 'score' in result:
                         if result['label'] in ['NEGATIVE', 'TOXIC', 'toxic', '1', 1]:
                             negative_score = max(negative_score, result['score'])
             elif isinstance(results, dict):
-                # If results is a single prediction dict
                 if results.get('label') in ['NEGATIVE', 'TOXIC', 'toxic', '1', 1]:
                     negative_score = results.get('score', 0.0)
             else:
-                # Fallback
                 logger.warning(f"Unexpected multilingual output format: {type(results)} - {results}")
                 negative_score = 0.0
             
@@ -417,7 +393,7 @@ async def moderate_content_local(text: str, model_preference: str = "auto", lang
                 result = await local_models.moderate_with_keywords(text)
         
         # Log results
-        logger.info(f"Local moderation result - Model: {model_preference}, Language: {detected_language}, "
+        print(f"Local moderation result - Model: {model_preference}, Language: {detected_language}, "
                    f"Type: {result.violation_type}, Flagged: {result.flagged}, Score: {result.harmful_score:.3f}")
         
         if result.violation_type != "CLEAN":
@@ -427,16 +403,13 @@ async def moderate_content_local(text: str, model_preference: str = "auto", lang
         
     except Exception as e:
         logger.error(f"Error in local content moderation: {str(e)}")
-        # Fallback to keyword-based moderation
         return await local_models.moderate_with_keywords(text)
 
-# Ensemble moderation combining multiple models
 async def moderate_content_ensemble(text: str) -> ModerationResult:
     """
     Ensemble moderation using multiple models for higher accuracy
     """
     try:
-        # Run multiple models in parallel
         results = await asyncio.gather(
             local_models.moderate_with_vietnamese_model(text),
             local_models.moderate_with_toxic_bert(text),
@@ -444,13 +417,11 @@ async def moderate_content_ensemble(text: str) -> ModerationResult:
             return_exceptions=True
         )
         
-        # Filter out exceptions
         valid_results = [r for r in results if isinstance(r, ModerationResult)]
         
         if not valid_results:
             return await local_models.moderate_with_keywords(text)
         
-        # Combine results using weighted voting
         language = local_models._detect_language(text)
         if language == "vi":
             weights = [0.5, 0.3, 0.2]  # Vietnamese, Toxic-BERT, Multilingual
@@ -465,7 +436,6 @@ async def moderate_content_ensemble(text: str) -> ModerationResult:
             weight = weights[i] if i < len(weights) else 0.1
             total_score += result.harmful_score * weight
             
-            # Combine categories
             for category, flagged in result.categories.items():
                 if category not in combined_categories:
                     combined_categories[category] = 0
@@ -474,7 +444,6 @@ async def moderate_content_ensemble(text: str) -> ModerationResult:
                 combined_categories[category] += (1 if flagged else 0) * weight
                 combined_category_scores[category] += result.category_scores.get(category, 0) * weight
         
-        # Normalize scores
         total_weight = sum(weights[:len(valid_results)])
         total_score /= total_weight
         
@@ -489,7 +458,7 @@ async def moderate_content_ensemble(text: str) -> ModerationResult:
             category_scores=combined_category_scores
         )
         
-        logger.info(f"Ensemble moderation - Models: {len(valid_results)}, Language: {language}, "
+        print(f"Ensemble moderation - Models: {len(valid_results)}, Language: {language}, "
                    f"Type: {ensemble_result.violation_type}, Score: {ensemble_result.harmful_score:.3f}")
         
         return ensemble_result

@@ -6,71 +6,36 @@ import logging
 import json
 import google.generativeai as genai
 from app.core.config import settings
+from app.core.prompts import booking_intent_prompt, time_extraction_prompt
 
 logger = logging.getLogger(__name__)
 
 class BookingResponseGenerator:
     """
-    Enhanced Booking System - One API call for Analysis + Response + Availability Matching
-    Optimized to reduce token usage while providing comprehensive booking assistance
+    Enhanced Booking System with Improved Prompts
+    Optimized using TrialResponse architecture for better AI processing
     """
     
     def __init__(self):
+        """Initialize the booking response generator with enhanced prompts"""
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.client = genai.GenerativeModel('gemini-2.0-flash')
     
     def get_combined_prompt(self) -> str:
-        """Combined prompt for analysis + response generation"""
-        return """
-You are an AI booking assistant that helps users schedule appointments with lecturers.
+        """Enhanced prompt with improved structure"""
+        return f"""
+{booking_intent_prompt}
 
-ANALYZE the user's message and RESPOND appropriately while providing booking analysis.
-
-Intent Classification:
-- A (Agreed/Accepted): User confirms/agrees to a time slot
-- C (Checking/Continuing): User asks about availability or explores options  
-- O (Out of scope): Unrelated to booking
-
-Safety Score (1-99):
-- 1-20: Very enthusiastic, eager to book
-- 21-40: Positive, interested 
-- 41-60: Neutral, asking questions
-- 61-80: Hesitant, showing resistance
-- 81-99: Clear rejection
-
-Time Extraction Rules:
-- "815" → "08:15", "1430" → "14:30"
-- "8h15" → "08:15", "2pm" → "14:00"
-- "từ 8h đến 10h" → range ["08:00", "10:00"]
-- "hôm nay" → today, "ngày mai" → tomorrow
-
-Response Guidelines:
+## Response Guidelines:
 - Be helpful and professional
 - If user mentions specific times, acknowledge them
 - If asking about availability, offer to check lecturer schedules
 - Keep responses concise but informative
 - Use Vietnamese when user uses Vietnamese
 
-Respond with a JSON object containing BOTH analysis and response:
-```json
-{
-  "analysis": {
-    "intent": "A|C|O",
-    "safety_score": 1-99,
-    "is_rejection": true/false,
-    "is_confirmation": true/false,
-    "input_slots": ["08:15", "14:00"],
-    "time_range": ["08:00", "10:00"],
-    "date": "2025-01-27",
-    "reasoning": "Brief explanation"
-  },
-  "response": {
-    "text": "Your helpful response to the user",
-    "needs_availability_check": true/false,
-    "suggested_next_action": "check_availability|confirm_booking|provide_info"
-  }
-}
-```
+## Analysis Instructions:
+Analyze the user's booking intent and extract time information.
+Then provide a natural, helpful response based on the analysis.
 """
 
     async def process_booking_request(
@@ -80,7 +45,7 @@ Respond with a JSON object containing BOTH analysis and response:
         db_session = None
     ) -> Dict:
         """
-        Process booking request with combined analysis + response + availability matching
+        Process booking request
         Returns complete response with options
         """
         try:
@@ -117,7 +82,7 @@ Respond with a JSON object containing BOTH analysis and response:
             return self._fallback_processing(user_message)
     
     async def _call_ai_combined(self, user_message: str, conversation_history: str) -> Dict:
-        """Call AI for combined analysis and response"""
+        """Call AI """
         context = f"""
 ## CURRENT USER MESSAGE:
 {user_message}
@@ -126,11 +91,13 @@ Respond with a JSON object containing BOTH analysis and response:
 {conversation_history}
 
 ## TASK:
-Analyze the user's booking intent and provide an appropriate response.
+1. Analyze the user's booking intent and extract time information
+2. Provide a natural, helpful response based on the analysis
 """
         
         try:
-            full_prompt = f"{self.get_combined_prompt()}\n\n{context}"
+            full_prompt = f"{self.get_combined_prompt()}\n\n{context}\n\nPlease respond with a JSON object containing both analysis and response:\n```json\n{{\n  \"analysis\": {{\n    \"intent\": \"A|C|O\",\n    \"safety_score\": 1-99,\n    \"is_rejection\": true/false,\n    \"is_confirmation\": true/false,\n    \"input_slots\": [\"08:15\", \"14:00\"],\n    \"time_range\": [\"08:00\", \"10:00\"],\n    \"date\": \"2025-01-27\",\n    \"reasoning\": \"Brief explanation\"\n  }},\n  \"response\": {{\n    \"text\": \"Your helpful response to the user\",\n    \"needs_availability_check\": true/false,\n    \"suggested_next_action\": \"check_availability|confirm_booking|provide_info\"\n  }}\n}}\n```"
+            
             response = self.client.generate_content(
                 full_prompt,
                 generation_config=genai.types.GenerationConfig(
@@ -140,7 +107,19 @@ Analyze the user's booking intent and provide an appropriate response.
             )
             
             result = self._parse_json_response(response.text)
-            return result
+            
+            analysis = result.get("analysis", {})
+            ai_response = result.get("response", {})
+            natural_response = await self._generate_natural_response(user_message, analysis)
+            
+            return {
+                "analysis": analysis,
+                "response": {
+                    "text": natural_response,
+                    "needs_availability_check": ai_response.get("needs_availability_check", False),
+                    "suggested_next_action": ai_response.get("suggested_next_action", "provide_info")
+                }
+            }
             
         except Exception as e:
             logger.warning(f"AI call failed, using fallback: {e}")
@@ -212,70 +191,112 @@ Analyze the user's booking intent and provide an appropriate response.
         try:
             if date_str:
                 parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                logger.info(f"Parsed date from string '{date_str}': {parsed_date}")
+                print(f"Parsed date from string '{date_str}': {parsed_date}")
                 return parsed_date
             else:
-                # Default to next Monday if no date specified
                 today = datetime.now().date()
-                days_ahead = 0 - today.weekday()  # Monday is 0
-                if days_ahead <= 0:  # If today is Monday or past Monday, get next Monday
+                days_ahead = 0 - today.weekday()
+                if days_ahead <= 0:
                     days_ahead += 7
                 next_monday = today + timedelta(days_ahead)
-                logger.info(f"No date specified, defaulting to next Monday: {next_monday}")
+                print(f"No date specified, defaulting to next Monday: {next_monday}")
                 return next_monday
         except Exception as e:
             logger.warning(f"Date parsing error for '{date_str}': {e}")
-            # Fallback to next Monday
             today = datetime.now().date()
             days_ahead = 0 - today.weekday()
             if days_ahead <= 0:
                 days_ahead += 7
             fallback_date = today + timedelta(days_ahead)
-            logger.info(f"Fallback to next Monday: {fallback_date}")
+            print(f"Fallback to next Monday: {fallback_date}")
             return fallback_date
     
     def _enhance_response_with_options(self, base_response: str, booking_options: List[Dict]) -> str:
         """Enhance AI response - only show alternatives when no exact matches"""
         
-        # Phân loại booking options
         exact_matches = [opt for opt in booking_options if opt["type"] == "exact_match"]
         alternatives = [opt for opt in booking_options if opt["type"] == "alternative"]
         
-        # Nếu có exact matches, chỉ trả về response gốc
-        # (Frontend sẽ hiển thị nút bên ngoài chat)
         if exact_matches:
-            enhanced_response = base_response + "\n\n✅ Tìm thấy khung giờ phù hợp!\n"
-            enhanced_response += "Vui lòng chọn khung giờ bạn muốn từ các lựa chọn bên dưới."
+            enhanced_response = base_response + "\n\n✅ Found a matching time slot!\n"
+            enhanced_response += "Please select the time slot you want from the options below."
             return enhanced_response
         
-        # Nếu không có exact matches nhưng có alternatives
         if alternatives:
-            no_exact_message = "\n\n❌ Không có thời gian nào trùng khớp chính xác\n"
-            no_exact_message += "Tuy nhiên, tôi tìm thấy một số khung giờ gần với thời gian bạn yêu cầu:\n\n"
+            no_exact_message = "\n\nNo exact time slot matches\n"
+            no_exact_message += "However, I found some time slots close to your request:\n\n"
             
-            # Hiển thị alternatives trong response text
             for i, opt in enumerate(alternatives[:5], 1):
                 no_exact_message += f"{i}. {opt['time']} - {opt['lecturer_name']}\n"
-                no_exact_message += f"   📚 {opt['subject']} | 📍 {opt['location']} | ⏱️ {opt['duration_minutes']} phút\n"
-                no_exact_message += f"   📅 {opt['date']}\n\n"
+                no_exact_message += f"{opt['subject']} |{opt['location']} |{opt['duration_minutes']} minutes\n"
+                no_exact_message += f"{opt['date']}\n\n"
             
-            no_exact_message += "💡 Nhấn vào khung giờ bạn muốn để đặt lịch!"
+            no_exact_message += "💡 Click on the time slot you want to book!"
             return base_response + no_exact_message
         
-        # Nếu không có slot nào
-        no_match_message = "\n\n❌ Không có thời gian nào trùng khớp\n"
-        no_match_message += "Rất tiếc, không có giảng viên nào rảnh vào thời gian bạn yêu cầu. \n"
-        no_match_message += "Bạn có thể:\n"
-        no_match_message += "• Thử thời gian khác (ví dụ: sáng thứ 2, chiều thứ 3)\n"
-        no_match_message += "• Hỏi về lịch trống của giảng viên\n"
-        no_match_message += "• Đặt lịch vào tuần sau\n\n"
-        no_match_message += "💡 Hãy cho tôi biết thời gian khác bạn có thể sắp xếp!"
+        no_match_message = "\n\nNo time slot matches\n"
+        no_match_message += "Unfortunately, no lecturer is available at the time you requested. \n"
+        no_match_message += "You can:\n"
+        no_match_message += "• Try a different time (e.g. morning Tuesday, afternoon Wednesday)\n"
+        no_match_message += "• Ask about the lecturer's availability\n"
+        no_match_message += "• Book for next week\n\n"
+        no_match_message += "Let me know what time you can arrange!"
         return base_response + no_match_message
+    
+    def _extract_function_call_result(self, response) -> Dict:
+        """Extract function call result from AI response (legacy method - not used)"""
+        try:
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'function_call') and part.function_call:
+                        return part.function_call.args
+            return {}
+        except Exception as e:
+            logger.warning(f"Function call extraction failed: {e}")
+            return {}
+    
+    async def _generate_natural_response(self, user_message: str, analysis: Dict) -> str:
+        """Generate natural response based on AI analysis"""
+        intent = analysis.get("intent", "O")
+        safety_score = analysis.get("safety_score", 50)
+        input_slots = analysis.get("input_slots", [])
+        time_range = analysis.get("time_range", [])
+        
+        if intent == "A":
+            if input_slots:
+                times_str = ", ".join(input_slots)
+                return f"Thank you! I will check the availability of the lecturers at {times_str}."
+            else:
+                return "Thank you! I will check the availability of the lecturers for the time you requested."
+        
+        elif intent == "C":
+            if time_range:
+                range_str = f"from {time_range[0]} to {time_range[1]}"
+                return f"I will check the availability of the lecturers for the time range {range_str}."
+            elif input_slots:
+                times_str = ", ".join(input_slots)
+                return f"I will check the availability of the lecturers at {times_str}."
+            else:
+                return "I will check the availability of the lecturers for the time you requested."
+        
+        else:  # intent == "O"
+            return "I can help you book an appointment with a lecturer. What time would you like to book?"
+    
+    def _determine_next_action(self, analysis: Dict) -> str:
+        """Determine next action based on analysis"""
+        intent = analysis.get("intent", "O")
+        is_confirmation = analysis.get("is_confirmation", False)
+        
+        if intent == "A" and is_confirmation:
+            return "confirm_booking"
+        elif intent in ["A", "C"]:
+            return "check_availability"
+        else:
+            return "provide_info"
     
     def _parse_json_response(self, response_text: str) -> Dict:
         """Parse JSON from AI response"""
         try:
-            # Extract JSON from response (handle markdown code blocks)
             json_text = response_text.strip()
             if "```json" in json_text:
                 json_text = json_text.split("```json")[1].split("```")[0].strip()
@@ -293,14 +314,57 @@ Analyze the user's booking intent and provide an appropriate response.
     
     def _manual_combined_processing(self, user_message: str) -> Dict:
         """Manual processing as fallback"""
-        # Reuse logic from simple analyzer
         from app.core.booking_analyzer_optimized import booking_analyzer_optimized
         
-        # Manual analysis using optimized analyzer
+        user_message_lower = user_message.lower()
+        
+        free_time_patterns = ['rảnh', 'rỗi', 'có thời gian', 'có lịch', 'sẵn sàng', 'free time', 'free']
+        is_free_time_message = any(pattern in user_message_lower for pattern in free_time_patterns)
+        
+        if is_free_time_message:
+            time_patterns = [
+                r'(\d{1,2})h',
+                r'(\d{1,2}):(\d{2})',
+                r'(\d{1,2})\s*giờ',
+                r'(\d{1,2})\s*tiếng',
+            ]
+            
+            extracted_times = []
+            for pattern in time_patterns:
+                matches = re.findall(pattern, user_message)
+                for match in matches:
+                    if len(match) == 1:
+                        hour = int(match[0])
+                        if 0 <= hour <= 23:
+                            extracted_times.append(f"{hour:02d}:00")
+                    elif len(match) == 2:
+                        hour, minute = int(match[0]), int(match[1])
+                        if 0 <= hour <= 23 and 0 <= minute <= 59:
+                            extracted_times.append(f"{hour:02d}:{minute:02d}")
+            
+            if extracted_times:
+                return {
+                    "analysis": {
+                        "intent": "C",
+                        "safety_score": 30,
+                        "is_rejection": False,
+                        "is_confirmation": False,
+                        "input_slots": extracted_times,
+                        "time_range": [],
+                        "date": None,
+                        "reasoning": f"User indicates availability at {', '.join(extracted_times)}"
+                    },
+                    "response": {
+                        "text": f"Awesome! I will check the availability of the lecturers at {', '.join(extracted_times)} for you.",
+                        "needs_availability_check": True,
+                        "suggested_next_action": "check_availability"
+                    }
+                }
+        
+        # Fallback to original processing
         intent_result = booking_analyzer_optimized._enhanced_manual_intent_analysis(user_message)
         time_result = booking_analyzer_optimized._enhanced_manual_time_extraction(user_message)
         
-        # Generate simple response
         response_text = self._generate_simple_response(intent_result["intent"], user_message)
         
         return {
@@ -324,11 +388,11 @@ Analyze the user's booking intent and provide an appropriate response.
     def _generate_simple_response(self, intent: str, user_message: str) -> str:
         """Generate simple response based on intent"""
         if intent == "A":
-            return "Cảm ơn bạn! Tôi sẽ kiểm tra lịch trống của các giảng viên cho khung giờ bạn yêu cầu."
+            return "Thank you! I will check the availability of the lecturers for the time you requested."
         elif intent == "C":
-            return "Tôi sẽ kiểm tra các khung giờ có sẵn của giảng viên cho bạn."
+            return "I will check the availability of the lecturers for the time you requested."
         else:
-            return "Tôi có thể giúp bạn đặt lịch hẹn với giảng viên. Bạn muốn đặt lịch vào thời gian nào?"
+            return "I can help you book an appointment with a lecturer. What time would you like to book?"
     
     def _fallback_processing(self, user_message: str) -> Dict:
         """Complete fallback when everything fails"""
@@ -341,7 +405,7 @@ Analyze the user's booking intent and provide an appropriate response.
             "time_range": [],
             "date": None,
             "reasoning": "Fallback processing due to system error",
-            "response_text": "Xin lỗi, có lỗi xảy ra. Bạn có thể thử lại không?",
+            "response_text": "Sorry, there was an error. Can you try again?",
             "booking_options": [],
             "needs_availability_check": False,
             "suggested_next_action": "provide_info"
@@ -365,33 +429,32 @@ def parse_vietnamese_date(user_message: str, input_slots: list) -> date:
         'thứ 7': 5, 'thứ bảy': 5,
         'chủ nhật': 6
     }
-    # 1. Ngày cụ thể dạng dd/mm hoặc dd-mm
+    # Specific date in dd/mm or dd-mm format
     match = re.search(r'ngày\s*(\d{1,2})[/-](\d{1,2})', user_message)
     if match:
         day, month = int(match.group(1)), int(match.group(2))
         year = today.year
-        # Nếu tháng đã qua thì lấy năm sau
         if month < today.month or (month == today.month and day < today.day):
             year += 1
         try:
             return datetime(year, month, day).date()
         except:
             pass
-    # 2. Ngày mai, ngày mốt, hôm nay
+    # Tomorrow, next day, today
     if 'ngày mai' in user_message:
         return today + timedelta(days=1)
     if 'ngày mốt' in user_message:
         return today + timedelta(days=2)
     if 'hôm nay' in user_message:
         return today
-    # 3. Thứ trong tuần (thứ 2, thứ 3, ... chủ nhật)
+    # Weekday (Tuesday, Wednesday, ... Sunday)
     for key, weekday in weekday_map.items():
         if key in user_message:
             days_ahead = (weekday - today.weekday() + 7) % 7
             if days_ahead == 0:
-                days_ahead = 7  # Nếu hôm nay là đúng thứ đó, lấy tuần sau
+                days_ahead = 7
             return today + timedelta(days=days_ahead)
-    # 4. "t4 tới", "t2 tới", ...
+    # "t4 tới", "t2 tới", ...
     match = re.search(r't(\d)\s*tới', user_message)
     if match:
         weekday = int(match.group(1)) - 2  # t2 = 0
@@ -399,19 +462,18 @@ def parse_vietnamese_date(user_message: str, input_slots: list) -> date:
         if days_ahead == 0:
             days_ahead = 7
         return today + timedelta(days=days_ahead)
-    # 5. Nếu chỉ có giờ (input_slots) → quyết định hôm nay/mai
+    # If only time is given (input_slots) → decide today/tomorrow
     if input_slots:
         try:
             slot_time = datetime.strptime(input_slots[0], "%H:%M").time()
             now_time = now.time()
             if slot_time <= now_time:
-                # Nếu giờ đã qua, lấy ngày mai
                 return today + timedelta(days=1)
             else:
                 return today
         except:
             pass
-    # 6. Không nhận diện được, trả về None
+    # If not recognized, return None
     return None
 
 # Singleton instance

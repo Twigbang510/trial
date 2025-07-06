@@ -199,7 +199,7 @@ Normalize times to HH:mm format and dates to YYYY-MM-DD format.
                 "reasoning": f"Intent: {intent_result['reasoning']} | Time: {time_result['reasoning']}"
             }
             
-            logger.info(f"Optimized booking analysis completed: {combined_result}")
+            print(f"Optimized booking analysis completed: {combined_result}")
             return combined_result
             
         except Exception as e:

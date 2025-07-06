@@ -1,6 +1,7 @@
 import google.generativeai as genai
 from typing import Dict, Any, List, Optional
 from app.core.config import settings
+from app.core.prompts import moderation_prompt
 import logging
 import os
 import asyncio
@@ -27,6 +28,7 @@ except ImportError:
     logger.warning("Local models not available. Install dependencies: pip install torch transformers")
 
 class ModerationResult:
+    """Result object for content moderation"""
     def __init__(self, flagged: bool, harmful_score: float, categories: Dict[str, bool], category_scores: Dict[str, float]):
         self.flagged = flagged
         self.harmful_score = harmful_score
@@ -52,7 +54,7 @@ class ModerationResult:
 def _convert_to_test_format(result: ModerationResult, method_used: str, detected_language: Optional[str] = None) -> Dict[str, Any]:
     """Convert ModerationResult to test-compatible dictionary format"""
     return {
-        "is_safe": not result.flagged,  # Invert: flagged=True means toxic, is_safe=False means toxic
+        "is_safe": not result.flagged,
         "confidence": result.harmful_score,
         "language": detected_language or "unknown",
         "method": method_used,
@@ -78,17 +80,15 @@ async def moderate_content(text: str, language: Optional[str] = None) -> Dict[st
         Dict: Dictionary containing moderation results in test-compatible format
     """
     try:
-        # Get moderation method preference
         moderation_method = os.getenv("MODERATION_METHOD", "gemini").lower()
         
-        logger.info(f"Moderating content with method: {moderation_method}")
+        print(f"Moderating content with method: {moderation_method}")
         
         if moderation_method == "local" or moderation_method == "auto":
-            # Try local models first
             if LOCAL_MODELS_AVAILABLE:
                 try:
                     result = await moderate_content_local(text, model_preference="auto", language=language)
-                    logger.info(f"Local moderation successful - Type: {result.violation_type}")
+                    print(f"Local moderation successful - Type: {result.violation_type}")
                     return _convert_to_test_format(result, "local", language)
                 except Exception as e:
                     logger.warning(f"Local moderation failed: {str(e)}")
@@ -100,49 +100,43 @@ async def moderate_content(text: str, language: Optional[str] = None) -> Dict[st
                 logger.warning("Local models not available, falling back to cloud services")
         
         if moderation_method == "ensemble" and LOCAL_MODELS_AVAILABLE:
-            # Use ensemble of local models
             try:
                 result = await moderate_content_ensemble(text)
-                logger.info(f"Ensemble moderation successful - Type: {result.violation_type}")
+                print(f"Ensemble moderation successful - Type: {result.violation_type}")
                 return _convert_to_test_format(result, "ensemble", language)
             except Exception as e:
                 logger.warning(f"Ensemble moderation failed: {str(e)}")
         
         if moderation_method == "gemini" or moderation_method == "auto":
-            # Try Gemini moderation
             if model and settings.GEMINI_API_KEY:
                 try:
                     result = await _moderate_with_gemini(text)
-                    logger.info(f"Gemini moderation successful - Type: {result.violation_type}")
+                    print(f"Gemini moderation successful - Type: {result.violation_type}")
                     return _convert_to_test_format(result, "gemini", language)
                 except Exception as e:
                     logger.warning(f"Gemini moderation failed: {str(e)}")
                     if moderation_method == "gemini":
-                        # If specifically requested Gemini but failed, return error result
                         error_result = ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
                         return _convert_to_test_format(error_result, "gemini", language)
             else:
                 logger.warning("Gemini API key not configured")
         
         if moderation_method == "openai":
-            # Use OpenAI moderation (from commented code)
             try:
                 result = await _moderate_with_openai(text)
-                logger.info(f"OpenAI moderation successful - Type: {result.violation_type}")
+                print(f"OpenAI moderation successful - Type: {result.violation_type}")
                 return _convert_to_test_format(result, "openai", language)
             except Exception as e:
                 logger.warning(f"OpenAI moderation failed: {str(e)}")
                 error_result = ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
                 return _convert_to_test_format(error_result, "openai", language)
         
-        # Final fallback: keyword-based moderation
         logger.warning("All advanced moderation methods failed, using keyword fallback")
         result = await _moderate_with_keywords(text)
         return _convert_to_test_format(result, "keywords", language)
             
     except Exception as e:
         logger.error(f"Error in content moderation: {str(e)}")
-        # In case of API failure, allow content but log the error
         error_result = ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
         return _convert_to_test_format(error_result, "error", language)
 
@@ -151,45 +145,64 @@ async def _moderate_with_gemini(text: str) -> ModerationResult:
     Moderate content using Gemini AI
     """
     try:
-        moderation_prompt = f"""
-You are a content moderation system. Analyze this text for harmful content and respond with a JSON object containing:
-- "flagged": boolean (true if content is harmful)
-- "harmful_score": float between 0.0-1.0 (higher = more harmful)
-- "categories": object with boolean values for: hate, harassment, self-harm, sexual, violence, dangerous
-- "category_scores": object with float scores 0.0-1.0 for each category
+        full_prompt = f"""
+{moderation_prompt}
 
-Text to analyze: "{text}"
+## Text to Analyze:
+"{text}"
+
+Please analyze this content and respond with a JSON object containing:
+- "flagged": boolean (true if content is harmful)
+- "harmful_score": integer between 0-100 (higher = more harmful)
+- "violation_type": string ("none", "inappropriate", "spam", "harassment", "other")
+- "reasoning": string (explanation for your decision)
 
 Respond ONLY with valid JSON, no other text.
 """
         
-        response = model.generate_content(moderation_prompt)
+        response = model.generate_content(
+            full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=500,
+            )
+        )
         
-        # Parse JSON response (handle markdown code blocks)
         import json
         import re
         try:
-            # Extract JSON from markdown code blocks if present
             response_text = response.text.strip()
-            
-            # Remove markdown code block wrapper if present
-            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                json_text = json_match.group(1)
+                json_text = json_match.group()
+                function_result = json.loads(json_text)
             else:
-                json_text = response_text
-            
-            result_data = json.loads(json_text)
+                function_result = {}
         except Exception as e:
-            # Fallback if JSON parsing fails
-            logger.warning(f"Failed to parse Gemini moderation response: {response.text}")
-            return ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
+            print(f"Failed to parse moderation response: {e}")
+            function_result = {}
         
-        # Extract data
-        flagged = result_data.get('flagged', False)
-        harmful_score = float(result_data.get('harmful_score', 0.0))
-        categories = result_data.get('categories', {})
-        category_scores = result_data.get('category_scores', {})
+        flagged = function_result.get('flagged', False)
+        harmful_score = float(function_result.get('harmful_score', 0)) / 100.0  # Convert 0-100 to 0.0-1.0
+        violation_type = function_result.get('violation_type', 'none')
+        
+        categories = {
+            'hate': violation_type == 'inappropriate',
+            'harassment': violation_type == 'harassment',
+            'self-harm': False,
+            'sexual': violation_type == 'inappropriate',
+            'violence': violation_type == 'harassment',
+            'dangerous': violation_type == 'other'
+        }
+        
+        category_scores = {
+            'hate': harmful_score if violation_type == 'inappropriate' else 0.0,
+            'harassment': harmful_score if violation_type == 'harassment' else 0.0,
+            'self-harm': 0.0,
+            'sexual': harmful_score if violation_type == 'inappropriate' else 0.0,
+            'violence': harmful_score if violation_type == 'harassment' else 0.0,
+            'dangerous': harmful_score if violation_type == 'other' else 0.0
+        }
         
         moderation_result = ModerationResult(
             flagged=flagged,
@@ -198,8 +211,8 @@ Respond ONLY with valid JSON, no other text.
             category_scores=category_scores
         )
         
-        # Log moderation result
-        logger.info(f"Gemini Moderation result - Type: {moderation_result.violation_type}, "
+
+        print(f"Gemini Moderation result - Type: {moderation_result.violation_type}, "
                    f"Flagged: {flagged}, Harmful Score: {harmful_score:.3f}")
         
         if moderation_result.violation_type != "CLEAN":
@@ -211,33 +224,40 @@ Respond ONLY with valid JSON, no other text.
         logger.error(f"Error in Gemini moderation: {str(e)}")
         return ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
 
+def _extract_moderation_function_result(response) -> Dict:
+    """Extract function call result from moderation response (legacy method - not used)"""
+    try:
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'function_call') and part.function_call:
+                    return part.function_call.args
+        return {}
+    except Exception as e:
+        logger.warning(f"Moderation function call extraction failed: {e}")
+        return {}
+
 async def _moderate_with_openai(text: str) -> ModerationResult:
     """
-    Moderate content using OpenAI (restored from commented code)
+    Moderate content using OpenAI (enhanced method)
     """
     try:
-        # Import OpenAI here to avoid errors if not installed
         from openai import OpenAI
         
         if not settings.OPENAI_API_KEY:
             logger.warning("OpenAI API key not configured")
             return ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
-        
-        # Create clean OpenAI client without global configurations
+
         client = OpenAI(
             api_key=settings.OPENAI_API_KEY,
-            timeout=30.0,  # Set explicit timeout
+            timeout=30.0,
         )
         
-        # Call OpenAI Moderation API
         response = client.moderations.create(input=text)
         
         result = response.results[0]
         
-        # Calculate overall harmful score (max of all category scores)
         harmful_score = max(result.category_scores.__dict__.values()) if result.category_scores else 0.0
         
-        # Convert categories and category_scores to dict
         categories = result.categories.__dict__
         category_scores = result.category_scores.__dict__
         
@@ -248,8 +268,7 @@ async def _moderate_with_openai(text: str) -> ModerationResult:
             category_scores=category_scores
         )
         
-        # Log moderation result
-        logger.info(f"OpenAI Moderation result - Type: {moderation_result.violation_type}, "
+        print(f"OpenAI Moderation result - Type: {moderation_result.violation_type}, "
                    f"Flagged: {result.flagged}, Harmful Score: {harmful_score:.3f}")
         
         if moderation_result.violation_type != "CLEAN":
@@ -322,15 +341,12 @@ async def moderate_content(text: str) -> ModerationResult:
             logger.warning("OpenAI API key not configured, skipping moderation")
             return ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={})
         
-        # Call OpenAI Moderation API
         response = client.moderations.create(input=text)
         
         result = response.results[0]
         
-        # Calculate overall harmful score (max of all category scores)
         harmful_score = max(result.category_scores.__dict__.values()) if result.category_scores else 0.0
         
-        # Convert categories and category_scores to dict
         categories = result.categories.__dict__
         category_scores = result.category_scores.__dict__
         
@@ -341,8 +357,7 @@ async def moderate_content(text: str) -> ModerationResult:
             category_scores=category_scores
         )
         
-        # Log moderation result
-        logger.info(f"Moderation result - Type: {moderation_result.violation_type}, "
+        print(f"Moderation result - Type: {moderation_result.violation_type}, "
                    f"Flagged: {result.flagged}, Harmful Score: {harmful_score:.3f}")
         
         if moderation_result.violation_type != "CLEAN":
@@ -352,6 +367,5 @@ async def moderate_content(text: str) -> ModerationResult:
         
     except Exception as e:
         logger.error(f"Error in content moderation: {str(e)}")
-        # In case of API failure, allow content but log the error
         return ModerationResult(flagged=False, harmful_score=0.0, categories={}, category_scores={}) 
 """ 

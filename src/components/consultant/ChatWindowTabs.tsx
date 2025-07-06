@@ -10,6 +10,7 @@ import BookingSuccessModal from '@/components/BookingSuccessModal';
 
 interface ChatWindowTabsProps {
   activeTab: ChatTab;
+  tabs?: ChatTab[];
   onAddMessage: (tabId: string, message: MessageType) => void;
   onConversationChange?: (conversationId: number) => void;
   onUpdateTabConversationId?: (tabId: string, conversationId: number) => void;
@@ -57,7 +58,7 @@ const validateMessageRealTime = (message: string): { showWarning: boolean; warni
   return { showWarning: false };
 };
 
-const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdateTabConversationId, updateTabBookingStatus, canCreateNewChat, onCreateNewTab, onRefreshUserData }: ChatWindowTabsProps) => {
+const ChatWindowTabs = ({ activeTab, tabs, onAddMessage, onConversationChange, onUpdateTabConversationId, updateTabBookingStatus, canCreateNewChat, onCreateNewTab, onRefreshUserData }: ChatWindowTabsProps) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
@@ -373,6 +374,34 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
       return;
     }
     
+    if (!activeTab.conversationId) {
+      
+      const conversationTabs = tabs?.filter((tab: ChatTab) => tab.type === 'conversation' && tab.conversationId) || [];
+      const latestConversationTab = conversationTabs[conversationTabs.length - 1];
+      
+      if (latestConversationTab?.conversationId) {
+        const fallbackConversationId = latestConversationTab.conversationId;
+        
+        await performBookingConfirmation(option, fallbackConversationId);
+        return;
+      }
+      
+      const errorMessage: MessageType = {
+        id: Date.now().toString(),
+        content: "Sorry, there was an error confirming your booking. Please try starting a new conversation.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      onAddMessage(activeTab.id, errorMessage);
+      return;
+    }
+    
+    await performBookingConfirmation(option, activeTab.conversationId);
+  };
+
+  const performBookingConfirmation = async (option: BookingOption, conversationId: number) => {
+    
+    
     setConfirmationProcessing('confirming');
     
     // Add user's "Yes" response immediately
@@ -385,9 +414,8 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
     onAddMessage(activeTab.id, userYesMessage);
 
     try {
-      // Call direct booking confirmation API (no AI processing)
-      const response = await chatbotApi.confirmBooking({
-        conversation_id: activeTab.conversationId!,
+      const bookingData = {
+        conversation_id: conversationId,
         availability_id: option.availability_id,
         lecturer_name: option.lecturer_name,
         date: option.date,
@@ -395,7 +423,9 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
         subject: option.subject,
         location: option.location,
         duration_minutes: option.duration_minutes
-      });
+      };
+      
+      const response = await chatbotApi.confirmBooking(bookingData);
       
       // Add success response from API
       const successMessage: MessageType = {
@@ -451,11 +481,22 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
       return;
     }
     
+    if (!activeTab.conversationId) {
+      const errorMessage: MessageType = {
+        id: Date.now().toString(),
+        content: "Sorry, there was an error. Please try starting a new conversation.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      onAddMessage(activeTab.id, errorMessage);
+      return;
+    }
+    
     setConfirmationProcessing('cancelling');
     
     try {
       // Call booking cancellation API
-      const response = await chatbotApi.cancelBooking(activeTab.conversationId!);
+      const response = await chatbotApi.cancelBooking(activeTab.conversationId);
       
       // Add user's "No" response
       const userNoMessage: MessageType = {
@@ -638,9 +679,7 @@ const ChatWindowTabs = ({ activeTab, onAddMessage, onConversationChange, onUpdat
         onAddMessage(targetTabId, botMessage);
       }
 
-      // Update conversation ID if this was a new conversation
       if (response.conversation_id && response.conversation_id > 0) {
-        // If this was a new chat tab that created a conversation, update the tab ID
         if (activeTab.type === 'new-chat' && onUpdateTabConversationId) {
           onUpdateTabConversationId(targetTabId, response.conversation_id);
         }

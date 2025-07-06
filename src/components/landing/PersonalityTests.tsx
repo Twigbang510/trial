@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 
-const TestButton = ({ children }: { children: React.ReactNode }) => (
-  <button className="flex items-center gap-2 bg-[#46287C] text-white px-6 md:px-8 py-3 md:py-4 rounded-full hover:bg-[#46287C]/90 transition-all text-sm md:text-base">
+const TestButton = ({ children, href }: { children: React.ReactNode, href: string }) => (
+  <a href={href} className="flex items-center gap-2 bg-[#46287C] text-white px-6 md:px-8 py-3 md:py-4 rounded-full hover:bg-[#46287C]/90 transition-all text-sm md:text-base">
     {children}
     <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
-  </button>
+  </a>
 );
 
 export const PersonalityTests = () => {
@@ -66,8 +66,8 @@ export const PersonalityTests = () => {
           </p>
 
           <div className="flex flex-row sm:flex-row gap-3 md:gap-4">
-            <TestButton>MBTI Test</TestButton>
-            <TestButton>Holland Test</TestButton>
+            <TestButton href='/consultant'>MBTI Test</TestButton>
+            <TestButton href='/consultant'>Holland Test</TestButton>
           </div>
         </motion.div>
       </div>

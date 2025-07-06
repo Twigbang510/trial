@@ -49,6 +49,7 @@ export const ConsultantPage = () => {
         <div className="flex-1 p-2 md:p-4 min-w-0 overflow-hidden">
           <ChatWindowTabs
             activeTab={activeTab}
+            tabs={tabs}
             onAddMessage={addMessageToTab}
             onConversationChange={handleConversationChange}
             onUpdateTabConversationId={updateTabConversationId}

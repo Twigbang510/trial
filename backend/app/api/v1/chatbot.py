@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from app.core.gemini import chat_with_gemini, format_conversation_history
 from app.core.booking_response_generator import booking_response_generator
+from app.core import prompts
 from app.crud.crud_conversation import conversation, message
 from app.crud import booking_analysis
 from app.schemas.conversation import ConversationCreate, MessageCreate, EnhancedChatResponse, BookingOption, ConversationUpdate
@@ -69,7 +70,7 @@ async def confirm_booking(
         # Check if conversation is already completed
         if ConversationService.check_conversation_completed(conv):
             return EnhancedChatResponse(
-                response="❌ This conversation has already been completed. The booking has already been confirmed.\n\nIf you need to make a new appointment, please start a new conversation.",
+                response="This conversation has already been completed. The booking has already been confirmed.\n\nIf you need to make a new appointment, please start a new conversation.",
                 conversation_id=conversation_id,
                 is_appropriate=True,
                 moderation_action="CLEAN",
@@ -126,7 +127,7 @@ async def confirm_booking(
         }
         
         # Debug logging
-        print("🔍 Debug - Response data:", response_data)
+        print("Debug - Response data:", response_data)
         
         return EnhancedChatResponse(**response_data)
         
@@ -238,24 +239,15 @@ async def chat_with_ai(
         
         # BOOKING PROCESSING
         # Only process booking if message contains booking-related keywords
-        booking_keywords = [
-            'đặt lịch', 'booking', 'appointment', 'schedule', 'thời gian', 'time', 
-            'ngày', 'date', 'giờ', 'hour', 'phòng', 'room', 'giảng viên', 'lecturer',
-            'tư vấn', 'consultation', 'hẹn', 'meeting', 'gặp', 'meet', 'lịch hẹn',
-            'đặt hẹn', 'book', 'reserve', 'đặt', 'hẹn gặp', 'tư vấn', 'advice',
-            'có thể', 'có thời gian', 'available', 'availability', 'trống', 'free'
-        ]
+        booking_keywords = prompts.BOOKING_KEYWORDS
         
         # Check if message contains booking keywords (case insensitive)
         message_lower = request.message.lower()
         is_booking_related = any(keyword in message_lower for keyword in booking_keywords)
         
-        # Also check if this is a follow-up message in a booking conversation
         if not is_booking_related and getattr(conv, 'booking_status') != 'ongoing':
-            # Check conversation history for booking context
             historical_messages = ConversationService.get_conversation_history(db, getattr(conv, 'id'))
             if historical_messages:
-                # If previous messages contain booking keywords, treat this as booking-related
                 history_text = ' '.join([msg.content.lower() for msg in historical_messages])
                 is_booking_related = any(keyword in history_text for keyword in booking_keywords)
         
@@ -306,6 +298,13 @@ async def chat_with_ai(
                     (intent == "C" and not input_slots and not time_range and not booking_options)
                 )
                 
+                if intent == "O" and is_booking_related:
+                    should_use_general_chat = False
+                    intent = "C"
+                    booking_result["intent"] = "C"
+                    booking_result["needs_availability_check"] = True
+                    booking_result["suggested_next_action"] = "check_availability"
+                
                 if should_use_general_chat:
                     conversation_history = [
                         {"content": msg.content, "sender": msg.sender}
@@ -323,14 +322,25 @@ async def chat_with_ai(
                     })
 
                 else:
-                    # Only apply fallback logic if booking_response_generator clearly failed
-                    if intent == "O" and not input_slots and not time_range and not booking_options:
-                        # This is truly general chat, not booking-related
-                        pass
-                    elif intent == "C" and not input_slots and not time_range and not booking_options:
-                        # Booking inquiry but no specific information extracted
-                        ai_response = "Tôi có thể giúp bạn tìm thời gian phù hợp! Bạn muốn đặt lịch vào thời gian nào?"
+                    if intent == "C" and not input_slots and not time_range and not booking_options:
+                        ai_response = prompts.DEFAULT_BOOKING_RESPONSE
                         booking_result["response_text"] = ai_response
+                        booking_result["needs_availability_check"] = False
+                        booking_result["suggested_next_action"] = "provide_info"
+                    elif intent == "C" and (input_slots or time_range):
+                        booking_result["needs_availability_check"] = True
+                        booking_result["suggested_next_action"] = "check_availability"
+                    elif intent == "A":
+                        booking_result["needs_availability_check"] = True
+                        booking_result["suggested_next_action"] = "confirm_booking"
+                
+                if booking_result.get("needs_availability_check") and db_session is not None:
+                    try:
+                        additional_options = await booking_response_generator._find_booking_options(analysis_data, db)
+                        if additional_options:
+                            booking_result["booking_options"] = additional_options
+                    except Exception as e:
+                        logger.warning(f"Failed to find additional booking options: {e}")
                 
             except Exception as e:
                 logger.error(f"Enhanced booking processing failed: {e}")
@@ -348,7 +358,6 @@ async def chat_with_ai(
                     "suggested_next_action": "provide_info"
                 }
         else:
-            # Use general chat for non-booking messages
             conversation_history = [
                 {"content": msg.content, "sender": msg.sender}
                 for msg in historical_messages
@@ -363,7 +372,6 @@ async def chat_with_ai(
                 "suggested_next_action": "provide_info"
             }
 
-        # Save bot response and update conversation
         ConversationService.save_bot_message(db, ai_response, getattr(conv, 'id'))
         ConversationService.increment_bot_response_count(db, conv)
         ConversationService.update_conversation_title(db, conv, request.message)
@@ -418,7 +426,6 @@ async def get_conversation(
     
     messages = message.get_by_conversation(db, conversation_id=conversation_id)
     
-    # Use to_dict method to avoid ObjectId serialization issues
     conv_dict = conv.to_dict()
     
     return {

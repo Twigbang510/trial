@@ -57,18 +57,18 @@ class Settings:
         import logging
         logger = logging.getLogger(__name__)
         
-        logger.info(f"🛡️  Moderation Configuration:")
-        logger.info(f"   Method: {self.MODERATION_METHOD}")
-        logger.info(f"   Threshold: {self.MODERATION_HARMFUL_THRESHOLD}")
-        logger.info(f"   Gemini API: {'✅ Available' if self.GEMINI_API_KEY else '❌ Not configured'}")
-        logger.info(f"   OpenAI API: {'✅ Available' if self.OPENAI_API_KEY else '❌ Not configured'}")
+        print(f"Moderation Configuration:")
+        print(f"Method: {self.MODERATION_METHOD}")
+        print(f"Threshold: {self.MODERATION_HARMFUL_THRESHOLD}")
+        print(f"Gemini API: {'Available' if self.GEMINI_API_KEY else 'Not configured'}")
+        print(f"OpenAI API: {'Available' if self.OPENAI_API_KEY else 'Not configured'}")
         
         # Check local models availability
         try:
             import torch
             import transformers
-            logger.info(f"   Local Models: ✅ Available (PyTorch {torch.__version__}, Transformers {transformers.__version__})")
+            print(f"Local Models: Available (PyTorch {torch.__version__}, Transformers {transformers.__version__})")
         except ImportError:
-            logger.info(f"   Local Models: ❌ Not available (missing dependencies)")
+            print(f"Local Models: Not available (missing dependencies)")
 
 settings = Settings()

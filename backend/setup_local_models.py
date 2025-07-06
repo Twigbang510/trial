@@ -72,7 +72,7 @@ RECOMMENDED_SETUPS = {
 
 def check_system_requirements():
     """Check if system meets requirements"""
-    logger.info("🔍 Checking system requirements...")
+    print("Checking system requirements...")
     
     # Check Python version
     if sys.version_info < (3.8, 0):
@@ -92,25 +92,25 @@ def check_system_requirements():
     # Check PyTorch installation
     try:
         import torch
-        logger.info(f"✅ PyTorch {torch.__version__} detected")
+        print(f"PyTorch {torch.__version__} detected")
         
         # Check CUDA availability
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
             gpu_name = torch.cuda.get_device_name(0)
-            logger.info(f"✅ CUDA available - {gpu_count} GPU(s) detected: {gpu_name}")
+            print(f"CUDA available - {gpu_count} GPU(s) detected: {gpu_name}")
         else:
-            logger.info("ℹ️  CUDA not available - will use CPU (slower but functional)")
+            print("CUDA not available - will use CPU (slower but functional)")
     except ImportError:
-        logger.error("❌ PyTorch not installed. Run: pip install torch")
+        logger.error("PyTorch not installed. Run: pip install torch")
         return False
     
     # Check transformers
     try:
         import transformers
-        logger.info(f"✅ Transformers {transformers.__version__} detected")
+        print(f"Transformers {transformers.__version__} detected")
     except ImportError:
-        logger.error("❌ Transformers not installed. Run: pip install transformers")
+        logger.error("Transformers not installed. Run: pip install transformers")
         return False
     
     return True
@@ -118,10 +118,10 @@ def check_system_requirements():
 def download_model(model_key: str, model_config: dict):
     """Download and cache a specific model"""
     model_name = model_config["name"]
-    logger.info(f"📥 Downloading {model_key}: {model_name}")
-    logger.info(f"   Description: {model_config['description']}")
-    logger.info(f"   Size: {model_config['size']}")
-    logger.info(f"   Languages: {', '.join(model_config['languages'])}")
+    print(f"Downloading {model_key}: {model_name}")
+    print(f"Description: {model_config['description']}")
+    print(f"Size: {model_config['size']}")
+    print(f"Languages: {', '.join(model_config['languages'])}")
     
     try:
         if model_config["type"] == "transformers":
@@ -129,14 +129,14 @@ def download_model(model_key: str, model_config: dict):
             from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
             
             # Download tokenizer and model
-            logger.info("   📁 Downloading tokenizer...")
+            print("Downloading tokenizer...")
             tokenizer = AutoTokenizer.from_pretrained(model_name)
             
-            logger.info("   🧠 Downloading model...")
+            print("Downloading model...")
             model = AutoModelForSequenceClassification.from_pretrained(model_name)
             
             # Test the model with a simple pipeline
-            logger.info("   🧪 Testing model...")
+            print("Testing model...")
             try:
                 test_pipeline = pipeline(
                     "text-classification",
@@ -146,15 +146,15 @@ def download_model(model_key: str, model_config: dict):
                 )
                 # Test with a simple sentence
                 result = test_pipeline("This is a test sentence.")
-                logger.info(f"   ✅ Model test successful: {len(result)} predictions")
+                print(f"Model test successful: {len(result)} predictions")
             except Exception as e:
                 logger.warning(f"   ⚠️  Model test failed but download successful: {str(e)}")
             
-            logger.info(f"✅ {model_key} downloaded successfully!")
+            print(f"{model_key} downloaded successfully!")
             return True
             
     except Exception as e:
-        logger.error(f"❌ Failed to download {model_key}: {str(e)}")
+        logger.error(f"Failed to download {model_key}: {str(e)}")
         return False
 
 def setup_models(setup_type: str = "recommended", specific_models: list = None):
@@ -164,8 +164,8 @@ def setup_models(setup_type: str = "recommended", specific_models: list = None):
     else:
         models_to_download = RECOMMENDED_SETUPS.get(setup_type, RECOMMENDED_SETUPS["recommended"])
     
-    logger.info(f"🚀 Setting up models: {setup_type}")
-    logger.info(f"📋 Models to download: {', '.join(models_to_download)}")
+    print(f"Setting up models: {setup_type}")
+    print(f"Models to download: {', '.join(models_to_download)}")
     
     # Calculate total estimated size
     total_size = 0
@@ -175,14 +175,14 @@ def setup_models(setup_type: str = "recommended", specific_models: list = None):
             size_str = MODEL_CONFIGS[model_key]["size"]
             total_size += size_estimates.get(size_str, 300)
     
-    logger.info(f"💾 Estimated total download size: ~{total_size}MB")
+    print(f"Estimated total download size: ~{total_size}MB")
     
     success_count = 0
     failed_models = []
     
     for model_key in models_to_download:
         if model_key not in MODEL_CONFIGS:
-            logger.warning(f"⚠️  Unknown model: {model_key}")
+            logger.warning(f"Unknown model: {model_key}")
             continue
         
         model_config = MODEL_CONFIGS[model_key]
@@ -193,57 +193,57 @@ def setup_models(setup_type: str = "recommended", specific_models: list = None):
             else:
                 failed_models.append(model_key)
         except KeyboardInterrupt:
-            logger.info("\n🛑 Setup interrupted by user")
+            print("\nSetup interrupted by user")
             break
         except Exception as e:
-            logger.error(f"❌ Unexpected error with {model_key}: {str(e)}")
+            logger.error(f"Unexpected error with {model_key}: {str(e)}")
             failed_models.append(model_key)
     
     # Summary
-    logger.info(f"\n📊 Setup Summary:")
-    logger.info(f"   ✅ Successfully downloaded: {success_count}/{len(models_to_download)} models")
+    print(f"\nSetup Summary:")
+    print(f"Successfully downloaded: {success_count}/{len(models_to_download)} models")
     
     if failed_models:
-        logger.info(f"   ❌ Failed models: {', '.join(failed_models)}")
-        logger.info(f"   💡 You can retry failed models individually")
+        print(f"Failed models: {', '.join(failed_models)}")
+        print(f"You can retry failed models individually")
     
     if success_count > 0:
-        logger.info(f"🎉 Setup complete! You can now use local models for content moderation.")
-        logger.info(f"   To use: Set MODERATION_METHOD=local in your .env file")
+        print(f"Setup complete! You can now use local models for content moderation.")
+        print(f"To use: Set MODERATION_METHOD=local in your .env file")
     else:
         logger.error(f"❌ No models were successfully downloaded.")
 
 def list_available_models():
     """List all available models with details"""
-    logger.info("📋 Available Models:")
-    logger.info("="*80)
+    print("Available Models:")
+    print("="*80)
     
     for model_key, config in MODEL_CONFIGS.items():
-        logger.info(f"\n🔹 {model_key}")
-        logger.info(f"   Name: {config['name']}")
-        logger.info(f"   Description: {config['description']}")
-        logger.info(f"   Size: {config['size']}")
-        logger.info(f"   Languages: {', '.join(config['languages'])}")
-        logger.info(f"   Accuracy: {config['accuracy']}")
-        logger.info(f"   Speed: {config['speed']}")
+        print(f"\n{model_key}")
+        print(f"   Name: {config['name']}")
+        print(f"   Description: {config['description']}")
+        print(f"   Size: {config['size']}")
+        print(f"   Languages: {', '.join(config['languages'])}")
+        print(f"   Accuracy: {config['accuracy']}")
+        print(f"   Speed: {config['speed']}")
     
-    logger.info("\n📦 Recommended Setups:")
-    logger.info("="*50)
+    print("\nRecommended Setups:")
+    print("="*50)
     
     for setup_name, models in RECOMMENDED_SETUPS.items():
         total_size = sum(250 if "250MB" in MODEL_CONFIGS[m]["size"] else 400 
                         for m in models if m in MODEL_CONFIGS)
-        logger.info(f"\n🔸 {setup_name}: {', '.join(models)} (~{total_size}MB)")
+        print(f"\n{setup_name}: {', '.join(models)} (~{total_size}MB)")
 
 def verify_models():
     """Verify that downloaded models work correctly"""
-    logger.info("🔍 Verifying downloaded models...")
+    print("Verifying downloaded models...")
     
     # Import transformers within function
     try:
         from transformers import pipeline
     except ImportError:
-        logger.error("❌ Transformers not available for verification")
+        logger.error("Transformers not available for verification")
         return
     
     test_texts = [
@@ -259,7 +259,7 @@ def verify_models():
     for model_key, config in MODEL_CONFIGS.items():
         try:
             model_name = config["name"]
-            logger.info(f"   Testing {model_key}...")
+            print(f"   Testing {model_key}...")
             
             # Try to create pipeline
             classifier = pipeline(
@@ -271,19 +271,19 @@ def verify_models():
             
             # Test with sample text
             result = classifier(test_texts[0])
-            logger.info(f"   ✅ {model_key} working correctly")
+            print(f"   ✅ {model_key} working correctly")
             working_models.append(model_key)
             
         except Exception as e:
             logger.warning(f"   ❌ {model_key} not available: {str(e)}")
             broken_models.append(model_key)
     
-    logger.info(f"\n📊 Verification Results:")
-    logger.info(f"   ✅ Working models: {len(working_models)} - {', '.join(working_models)}")
+    print(f"\nVerification Results:")
+    print(f"   Working models: {len(working_models)} - {', '.join(working_models)}")
     
     if broken_models:
-        logger.info(f"   ❌ Unavailable models: {len(broken_models)} - {', '.join(broken_models)}")
-        logger.info(f"   💡 Run setup again to download missing models")
+        print(f"   Unavailable models: {len(broken_models)} - {', '.join(broken_models)}")
+        print(f"   Run setup again to download missing models")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -332,7 +332,7 @@ Examples:
     args = parser.parse_args()
     
     # Print header
-    print("🏠 Local Models Setup for Content Moderation")
+    print("Local Models Setup for Content Moderation")
     print("=" * 50)
     
     if args.list:
@@ -346,7 +346,7 @@ Examples:
         return
     
     if not check_system_requirements():
-        logger.error("❌ System requirements not met")
+        logger.error("System requirements not met")
         sys.exit(1)
     
     if args.setup:
@@ -355,13 +355,13 @@ Examples:
         setup_models(specific_models=args.models)
     else:
         # Interactive setup
-        logger.info("🤖 Interactive Setup")
-        logger.info("Choose a setup option:")
-        logger.info("1. Minimal (2 models, ~650MB)")
-        logger.info("2. Recommended (3 models, ~900MB)")  
-        logger.info("3. Complete (4 models, ~1.4GB)")
-        logger.info("4. Vietnamese Focused (3 models, ~800MB)")
-        logger.info("5. List all models")
+        print("Interactive Setup")
+        print("Choose a setup option:")
+        print("1. Minimal (2 models, ~650MB)")
+        print("2. Recommended (3 models, ~900MB)")  
+        print("3. Complete (4 models, ~1.4GB)")
+        print("4. Vietnamese Focused (3 models, ~800MB)")
+        print("5. List all models")
         
         try:
             choice = input("\nEnter choice (1-5): ").strip()
@@ -380,7 +380,7 @@ Examples:
                 logger.error("Invalid choice")
                 
         except KeyboardInterrupt:
-            logger.info("\n🛑 Setup cancelled by user")
+            print("\nSetup cancelled by user")
 
 if __name__ == "__main__":
     main() 

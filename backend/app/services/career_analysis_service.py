@@ -4,14 +4,15 @@ from typing import Dict, List, Tuple
 import google.generativeai as genai
 
 from app.core.config import settings
+from app.core.prompts import career_analysis_prompt
 from app.schemas.career_analysis import HollandScores, CareerSuggestion
 
-# Configure Gemini API
 genai.configure(api_key=settings.GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.0-flash')
 
 
 class CareerAnalysisService:
+    """Career analysis service"""
     def __init__(self):
         self.vietnam_universities = [
             "Vietnam National University",
@@ -31,38 +32,35 @@ class CareerAnalysisService:
     def analyze_career_path(self, mbti_type: str, holland_scores: HollandScores) -> Dict:
         """Main method to analyze career path using Gemini AI"""
         
-        # Calculate Holland code
         holland_code = self._calculate_holland_code(holland_scores)
         
-        # Create comprehensive prompt for Gemini
-        prompt = self._create_analysis_prompt(mbti_type, holland_scores, holland_code)
-        
         try:
-            # Generate analysis with Gemini
-            response = model.generate_content(prompt)
-            analysis_text = response.text
+            prompt = self._create_enhanced_analysis_prompt(mbti_type, holland_scores, holland_code)
             
-            # Parse the structured response
-            parsed_results = self._parse_gemini_response(analysis_text)
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=1500,
+                )
+            )
             
-            # Add calculated Holland code
+            parsed_results = self._parse_gemini_response(response.text)
+            
             parsed_results["holland_code"] = holland_code
             
             return parsed_results
             
         except Exception as e:
-            print(f"Error in Gemini analysis: {str(e)}")
-            # Fallback to basic analysis
+            print(f"Error in Gemini analysis with enhanced prompts: {str(e)}")
             return self._fallback_analysis(mbti_type, holland_code)
     
     def _calculate_holland_code(self, holland_scores: HollandScores) -> str:
         """Calculate Holland code from scores"""
         scores_dict = holland_scores.model_dump()
         
-        # Sort by score (highest first)
         sorted_scores = sorted(scores_dict.items(), key=lambda x: x[1], reverse=True)
         
-        # Take top 3 and create code
         holland_mapping = {
             'realistic': 'R',
             'investigative': 'I', 
@@ -72,10 +70,9 @@ class CareerAnalysisService:
             'conventional': 'C'
         }
         
-        # Get top 3 codes
         top_codes = [holland_mapping[item[0]] for item in sorted_scores[:3] if item[1] > 0]
         
-        return ''.join(top_codes[:3])  # Return max 3 characters
+        return ''.join(top_codes[:3])
     
     def _create_analysis_prompt(self, mbti_type: str, holland_scores: HollandScores, holland_code: str) -> str:
         """Create comprehensive prompt for Gemini analysis"""
@@ -132,16 +129,81 @@ class CareerAnalysisService:
         
         return prompt
     
+    def _create_enhanced_analysis_prompt(self, mbti_type: str, holland_scores: HollandScores, holland_code: str) -> str:
+        """Create prompt with improved structure"""
+        
+        holland_dict = holland_scores.model_dump()
+        
+        prompt = f"""
+{career_analysis_prompt}
+
+## User Data:
+**MBTI Type:** {mbti_type}
+**Holland Interest Scores:**
+- Realistic: {holland_dict['realistic']}/100
+- Investigative: {holland_dict['investigative']}/100  
+- Artistic: {holland_dict['artistic']}/100
+- Social: {holland_dict['social']}/100
+- Enterprising: {holland_dict['enterprising']}/100
+- Conventional: {holland_dict['conventional']}/100
+
+**Holland Code:** {holland_code}
+
+## Vietnamese Universities:
+{', '.join(self.vietnam_universities)}
+
+## Instructions:
+Analyze this person's career path based on their MBTI type and Holland scores.
+Focus on careers available in Vietnam and include relevant Vietnamese universities.
+Provide realistic match percentages (70-95%) and salary ranges in VND context.
+
+Please provide a comprehensive career analysis in the following JSON format:
+
+{{
+    "personality_summary": "A 2-3 sentence summary of their personality",
+    "personality_traits": ["trait1", "trait2", "trait3", "trait4", "trait5"],
+    "strengths": ["strength1", "strength2", "strength3", "strength4"],
+    "growth_areas": ["area1", "area2", "area3"],
+    "career_suggestions": [
+        {{
+            "title": "Job Title",
+            "description": "Detailed description of the role and why it fits",
+            "match_percentage": 85,
+            "required_skills": ["skill1", "skill2", "skill3"],
+            "universities": ["University of Economics HCMC", "FPT University"],
+            "industry": "Technology",
+            "salary_range": "15-25 million VND"
+        }}
+    ],
+    "detailed_analysis": "A comprehensive 3-4 paragraph analysis of their personality, strengths, and career fit",
+    "recommendations": "Specific actionable recommendations for career development"
+}}
+
+Respond ONLY with the JSON format above, no additional text.
+"""
+        
+        return prompt
+    
+    def _extract_career_function_result(self, response) -> Dict:
+        """Extract function call result from career analysis response"""
+        try:
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'function_call') and part.function_call:
+                        return part.function_call.args
+            return {}
+        except Exception as e:
+            print(f"Career function call extraction failed: {e}")
+            return {}
+    
     def _parse_gemini_response(self, response_text: str) -> Dict:
         """Parse Gemini's JSON response"""
         try:
-            # Extract JSON from response
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 json_str = json_match.group()
                 parsed = json.loads(json_str)
                 
-                # Validate and clean the response
                 return self._validate_response(parsed)
             else:
                 raise ValueError("No JSON found in response")
@@ -154,7 +216,6 @@ class CareerAnalysisService:
     def _validate_response(self, response: Dict) -> Dict:
         """Validate and clean the parsed response"""
         
-        # Ensure required fields exist
         required_fields = [
             "personality_summary", "personality_traits", "strengths", 
             "growth_areas", "career_suggestions", "detailed_analysis", "recommendations"
@@ -164,12 +225,10 @@ class CareerAnalysisService:
             if field not in response:
                 response[field] = []
         
-        # Validate career suggestions format
         if "career_suggestions" in response:
             validated_careers = []
             for career in response["career_suggestions"]:
                 if isinstance(career, dict):
-                    # Ensure required career fields
                     validated_career = {
                         "title": career.get("title", "Unknown Position"),
                         "description": career.get("description", ""),
@@ -246,6 +305,7 @@ class CareerAnalysisService:
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
+            print(f"Error generating career chat response: {e}")
             return f"I'd be happy to help you with career guidance! Could you tell me more about what specific aspect of your career path you'd like to explore?"
 
 

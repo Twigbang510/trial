@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def setup_environment():
     """Environment setup"""
-    logger.info("🔧 Setting up environment...")
+    print("Setting up environment...")
     
     # Check Python version
     if sys.version_info < (3, 8, 0):
@@ -38,71 +38,71 @@ def setup_environment():
         'torch': 'PyTorch',
         'transformers': 'Transformers',
         'google.generativeai': 'Google Generative AI',
-        'openai': 'OpenAI (tùy chọn)'
+        'openai': 'OpenAI'
     }
     
     missing_packages = []
     for package, name in required_packages.items():
         try:
             __import__(package)
-            logger.info(f"✅ {name}: Installed")
+            print(f"{name}: Installed")
         except ImportError:
             if package != 'openai':  # OpenAI is optional
                 missing_packages.append(f"pip install {package}")
                 logger.warning(f"⚠️  {name}: Not installed")
             else:
-                logger.info(f"ℹ️  {name}: Not installed (optional)")
+                print(f"{name}: Not installed (optional)")
     
     if missing_packages:
-        logger.error("❌ Missing required packages:")
+        logger.error("Missing required packages:")
         for cmd in missing_packages:
             logger.error(f"   {cmd}")
         return False
     
-    logger.info("✅ Environment ready!")
+    print("Environment ready!")
     return True
 
 def setup_local_models():
     """Setup local models"""
-    logger.info("🤖 Setting up local models...")
+    print("Setting up local models...")
     
     try:
         from setup_local_models import main as setup_main
         setup_main()
     except Exception as e:
         logger.error(f"❌ Error setting up local models: {str(e)}")
-        logger.info("💡 Run: python setup_local_models.py")
+        print("Run: python setup_local_models.py")
 
 def check_api_keys():
     """Check API keys"""
-    logger.info("🔑 Checking API keys...")
+    print("Checking API keys...")
     
     # Gemini API Key
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key and gemini_key != "your-gemini-api-key":
-        logger.info("✅ Gemini API Key: Configured")
+        print("Gemini API Key: Configured")
     else:
         logger.warning("⚠️  Gemini API Key: Not configured")
-        logger.info("💡 Setup: export GEMINI_API_KEY=your_actual_key")
+        print("Setup: export GEMINI_API_KEY=your_actual_key")
     
     # OpenAI API Key (optional)
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key and openai_key != "your-openai-api-key":
-        logger.info("✅ OpenAI API Key: Configured")
+        print("OpenAI API Key: Configured")
     else:
-        logger.info("ℹ️  OpenAI API Key: Not configured (optional)")
+        print("OpenAI API Key: Not configured (optional)")
 
 def show_configuration():
     """Show current configuration"""
-    logger.info("⚙️ Current moderation configuration:")
+    print("⚙️ Current moderation configuration:")
     
     # Current method
     method = os.getenv("MODERATION_METHOD", "auto")
-    logger.info(f"   🎯 Method: {method}")
+    print(f"Method: {method}")
     
     # Threshold
     threshold = os.getenv("MODERATION_HARMFUL_THRESHOLD", "0.7")
-    logger.info(f"   📊 Harmful threshold: {threshold}")
+    print(f"Harmful threshold: {threshold}")
     
     # Available methods
     available_methods = []
@@ -126,29 +126,29 @@ def show_configuration():
     # Keywords always available
     available_methods.append("keywords")
     
-    logger.info(f"   🛠️ Available methods: {', '.join(available_methods)}")
+    print(f"Available methods: {', '.join(available_methods)}")
     
     if "gemini" in available_methods:
-        logger.info("   🏆 Best: MODERATION_METHOD=gemini (100% accuracy)")
+        print("Best: MODERATION_METHOD=gemini (100% accuracy)")
     elif "local" in available_methods:
-        logger.info("   🔒 Private: MODERATION_METHOD=local (offline)")
+        print("Private: MODERATION_METHOD=local (offline)")
     else:
-        logger.info("   ⚡ Basic: MODERATION_METHOD=keywords (84.6% accuracy)")
+        print("Basic: MODERATION_METHOD=keywords (84.6% accuracy)")
 
 async def run_tests():
     """Run system tests"""
-    logger.info("🧪 Running system tests...")
+    print("Running system tests...")
     
     try:
         from test_moderation import main as test_main
         await test_main()
     except Exception as e:
         logger.error(f"❌ Error running tests: {str(e)}")
-        logger.info("💡 Run: python test_moderation.py")
+        print("Run: python test_moderation.py")
 
 async def check_status():
     """Check system status"""
-    logger.info("📊 Checking system status...")
+    print("Checking system status...")
     
     # Test a simple moderation call
     try:
@@ -157,8 +157,8 @@ async def check_status():
         # Test safe content
         result = await moderate_content("Hello world", "en")
         if result and result.get("method"):
-            logger.info(f"✅ Moderation method: {result['method']}")
-            logger.info(f"   Result: {'Safe' if result['is_safe'] else 'Unsafe'}")
+            print(f"Moderation method: {result['method']}")
+            print(f"Result: {'Safe' if result['is_safe'] else 'Unsafe'}")
         else:
             logger.error("❌ System did not respond correctly")
     except Exception as e:
@@ -172,29 +172,29 @@ def main():
     
     args = parser.parse_args()
     
-    print("🛡️ **Moderation Manager**")
+    print("Moderation Manager")
     print("=" * 40)
     
     if args.command == "setup":
-        print("🚀 Setting up system...")
+        print("Setting up system...")
         if setup_environment():
             check_api_keys()
             setup_local_models()
-            print("\n✅ Setup complete!")
+            print("\nSetup complete!")
         else:
-            print("\n❌ Setup failed!")
+            print("\nSetup failed!")
             
     elif args.command == "test":
-        print("🧪 Running tests...")
+        print("Running tests...")
         asyncio.run(run_tests())
         
     elif args.command == "config":
-        print("⚙️ Current configuration...")
+        print("Current configuration...")
         check_api_keys()
         show_configuration()
         
     elif args.command == "status":
-        print("📊 Checking status...")
+        print("Checking status...")
         asyncio.run(check_status())
 
 if __name__ == "__main__":

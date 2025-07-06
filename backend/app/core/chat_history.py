@@ -102,7 +102,7 @@ class ChatHistoryManager:
         # Check if booking is completed
         if ChatHistoryManager.detect_booking_completion(user_message, conversation_history):
             setattr(conversation, 'booking_status', 'completed')
-            logger.info(f"Conversation {getattr(conversation, 'id', None)} marked as completed booking")
+            print(f"Conversation {getattr(conversation, 'id', None)} marked as completed booking")
         
         return conversation
     
@@ -117,7 +117,7 @@ class ChatHistoryManager:
         if (getattr(conversation, 'bot_response_count', 0) >= ChatHistoryManager.MAX_BOT_RESPONSES and 
             getattr(conversation, 'booking_status', None) == "ongoing"):
             setattr(conversation, 'booking_status', 'abandoned')
-            logger.info(f"Conversation {getattr(conversation, 'id', None)} marked as abandoned after {getattr(conversation, 'bot_response_count', 0)} responses")
+            print(f"Conversation {getattr(conversation, 'id', None)} marked as abandoned after {getattr(conversation, 'bot_response_count', 0)} responses")
         
         return conversation
     

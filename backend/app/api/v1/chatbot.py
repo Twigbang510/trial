@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from typing import List, Optional, Union
 from pymongo.database import Database
@@ -17,6 +17,10 @@ from app.services.booking_service import BookingService
 from app.services.conversation_service import ConversationService
 from app.services.moderation_service import ModerationService
 import logging
+import httpx
+
+logging.basicConfig(level=logging.DEBUG)
+AI_MODULE_URL = "http://localhost:50/trial-ai/v1/kb_response"
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +44,6 @@ class BookingConfirmRequest(BaseModel):
     subject: str
     location: str
     duration_minutes: int
-
-# Keep old ChatResponse for backward compatibility
-class ChatResponse(BaseModel):
-    response: str
-    conversation_id: str
-    is_appropriate: bool = True
-    moderation_action: Optional[str] = None
-    warning_message: Optional[str] = None
 
 @router.post("/confirm-booking", response_model=EnhancedChatResponse)
 async def confirm_booking(
@@ -178,12 +174,12 @@ async def chat_with_ai(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     try:
-        # Check user status
+        logger.debug(f"Received chat request: {request}")
+        # 1. Check user status
         UserService.check_user_status(current_user)
-        
-        # Moderate content and handle violations
+
+        # 2. Moderation content (check if the message is appropriate)
         moderation_data = await ModerationService.moderate_user_content(request.message, current_user, db)
-        
         if moderation_data["should_block"]:
             return EnhancedChatResponse(
                 response="Your message has been blocked due to policy violations. Please ensure your messages are appropriate and constructive.",
@@ -192,19 +188,16 @@ async def chat_with_ai(
                 moderation_action="BLOCKED",
                 warning_message=moderation_data["warning_message"]
             )
-        
-        # Update current_user if violations were handled
         if moderation_data["should_warn"]:
             current_user = moderation_data["updated_user"]
-        
-        # Get or create conversation
+
+        # 3. Get or create conversation, check access
         conv = ConversationService.get_or_create_conversation(
             db, request.conversation_id, current_user, request.context or "consultant"
         )
-        
-        # Validate access and check completion status
         ConversationService.validate_conversation_access(conv, current_user)
-        
+
+        # 4. Check if conversation is completed
         if ConversationService.check_conversation_completed(conv):
             return EnhancedChatResponse(
                 response="✅ This conversation has been completed. Your booking has been confirmed.\n\nIf you need to make a new appointment, please start a new conversation by refreshing the page.",
@@ -216,188 +209,108 @@ async def chat_with_ai(
                 suggested_next_action="complete"
             )
 
-        # Save user message and get conversation history
+        # 5. Save user message, get history (only once)
         user_msg_obj = ConversationService.save_user_message(db, request.message, getattr(conv, 'id'))
         historical_messages = ConversationService.get_conversation_history(db, getattr(conv, 'id'))
+        formatted_history = ConversationService.format_conversation_for_processing(historical_messages)
+
+        # Build chat_history as a list of {role, content} (role: "TrialBot" if msg.sender == "bot", "contact" otherwise)
+        chat_history = []
+        for msg in historical_messages:
+            role = "TrialBot" if msg.sender == "bot" else "contact"
+            chat_history.append({"role": role, "content": msg.content})
+        # Add the current user message to the chat history
+        chat_history.append({"role": "contact", "content": request.message})
+
+        ai_payload = {
+            "question": request.message,
+            "channel": "SMS",
+            "chat_history": chat_history,
+            "contact_id": str(getattr(current_user, 'id', '123'))
+        }
+        logging.info(f"[AI MODULE] Payload sent: {ai_payload}")
+        async with httpx.AsyncClient(timeout=60) as client:
+            ai_response = await client.post(AI_MODULE_URL, json=ai_payload)
+        logging.info(f"[AI MODULE] Status: {ai_response.status_code}") 
+        logging.info(f"[AI MODULE] Response received: {ai_response.text}")
+        ai_response.raise_for_status()
+        ai_data = ai_response.json()
+        logger.debug(f"Received AI module response: {ai_data}")
+        bot_reply = (
+            ai_data.get("output")
+            or ai_data.get("response")
+            or (ai_data.get("final_response", {}).get("response") if isinstance(ai_data.get("final_response"), dict) else None)
+            or ""
+        )
+        if not bot_reply or str(bot_reply).strip().lower() == "none":
+            bot_reply = ""
+        # Check if AI response indicates a booking should be created
+        is_ai_booking = ai_data.get("isSchedule", False) and ai_data.get("datetime")
+        ai_booking_result = None
         
-        # Check conversation limits
-        future_bot_count = getattr(conv, 'bot_response_count', 0) + 1
-        if ConversationService.should_stop_conversation(conv, future_bot_count):
-            stop_message = ConversationService.abandon_conversation(db, conv)
-            ConversationService.save_bot_message(db, stop_message, getattr(conv, 'id'))
-            
-            return EnhancedChatResponse(
-                response=stop_message,
+        if is_ai_booking:
+            logger.info(f"AI booking detected: {ai_data}")
+            # Process AI booking response
+            ai_booking_result = BookingService.process_ai_booking_response(
+                db=db,
+                ai_response=ai_data,
                 conversation_id=str(getattr(conv, 'id')),
-                is_appropriate=True,
-                moderation_action="CLEAN"
+                user=current_user
             )
-        
-        # Prepare conversation for processing
-        conversation_history_str = ConversationService.format_conversation_for_processing(historical_messages)
-        ConversationService.update_conversation_status(db, conv, request.message, conversation_history_str)
-        
-        # BOOKING PROCESSING
-        # Only process booking if message contains booking-related keywords
-        booking_keywords = prompts.BOOKING_KEYWORDS
-        
-        # Check if message contains booking keywords (case insensitive)
-        message_lower = request.message.lower()
-        is_booking_related = any(keyword in message_lower for keyword in booking_keywords)
-        
-        if not is_booking_related and getattr(conv, 'booking_status') != 'ongoing':
-            historical_messages = ConversationService.get_conversation_history(db, getattr(conv, 'id'))
-            if historical_messages:
-                history_text = ' '.join([msg.content.lower() for msg in historical_messages])
-                is_booking_related = any(keyword in history_text for keyword in booking_keywords)
-        
-        if is_booking_related:
-            try:
-                import time
-                start_time = time.time()
-                
-                booking_result = await booking_response_generator.process_booking_request(
-                    user_message=request.message,
-                    conversation_history=conversation_history_str,
-                    db_session=db
-                )
-                
-                processing_time_ms = int((time.time() - start_time) * 1000)
-                
-                analysis_data = {
-                    "intent": booking_result.get("intent"),
-                    "safety_score": booking_result.get("safety_score"),
-                    "is_rejection": booking_result.get("is_rejection"),
-                    "is_confirmation": booking_result.get("is_confirmation"),
-                    "input_slots": booking_result.get("input_slots"),
-                    "time_range": booking_result.get("time_range"),
-                    "date": booking_result.get("date"),
-                    "reasoning": booking_result.get("reasoning")
-                }
-                
-                booking_analysis.create_analysis(
-                    db=db,
-                    conversation_id=str(getattr(conv, 'id')),
-                    message_id=str(getattr(user_msg_obj, 'id')),
-                    analysis_result=analysis_data,
-                    processing_time_ms=processing_time_ms
-                )
-                
-                if booking_result.get("intent") == "A" and booking_result.get("is_confirmation"):
-                    setattr(conv, 'booking_status', "completed")
-                    conversation.update(db, db_obj=conv, obj_in=ConversationUpdate(booking_status="completed"))
-                
-                intent = booking_result.get("intent", "O")
-                input_slots = booking_result.get("input_slots", [])
-                time_range = booking_result.get("time_range", [])
-                booking_options = booking_result.get("booking_options", [])
-                ai_response = booking_result.get("response_text", "")
-                
-                should_use_general_chat = (
-                    intent == "O" or
-                    (intent == "C" and not input_slots and not time_range and not booking_options)
-                )
-                
-                if intent == "O" and is_booking_related:
-                    should_use_general_chat = False
-                    intent = "C"
-                    booking_result["intent"] = "C"
-                    booking_result["needs_availability_check"] = True
-                    booking_result["suggested_next_action"] = "check_availability"
-                
-                if should_use_general_chat:
-                    conversation_history = [
-                        {"content": msg.content, "sender": msg.sender}
-                        for msg in historical_messages
-                    ]
-                    
-                    formatted_history = format_conversation_history(conversation_history)
-                    ai_response = chat_with_gemini(request.message, formatted_history, request.context or "consultant")
-                    
-                    booking_result.update({
-                        "response_text": ai_response,
-                        "booking_options": [],
-                        "needs_availability_check": False,
-                        "suggested_next_action": "provide_info"
-                    })
-
-                else:
-                    if intent == "C" and not input_slots and not time_range and not booking_options:
-                        ai_response = prompts.DEFAULT_BOOKING_RESPONSE
-                        booking_result["response_text"] = ai_response
-                        booking_result["needs_availability_check"] = False
-                        booking_result["suggested_next_action"] = "provide_info"
-                    elif intent == "C" and (input_slots or time_range):
-                        booking_result["needs_availability_check"] = True
-                        booking_result["suggested_next_action"] = "check_availability"
-                    elif intent == "A":
-                        booking_result["needs_availability_check"] = True
-                        booking_result["suggested_next_action"] = "confirm_booking"
-                
-                if booking_result.get("needs_availability_check") and db_session is not None:
-                    try:
-                        additional_options = await booking_response_generator._find_booking_options(analysis_data, db)
-                        if additional_options:
-                            booking_result["booking_options"] = additional_options
-                    except Exception as e:
-                        logger.warning(f"Failed to find additional booking options: {e}")
-                
-            except Exception as e:
-                logger.error(f"Enhanced booking processing failed: {e}")
-                conversation_history = [
-                    {"content": msg.content, "sender": msg.sender}
-                    for msg in historical_messages
-                ]
-                
-                formatted_history = format_conversation_history(conversation_history)
-                ai_response = chat_with_gemini(request.message, formatted_history, request.context or "consultant")
-                booking_result = {
-                    "response_text": ai_response,
-                    "booking_options": [],
-                    "needs_availability_check": False,
-                    "suggested_next_action": "provide_info"
-                }
-        else:
-            conversation_history = [
-                {"content": msg.content, "sender": msg.sender}
-                for msg in historical_messages
-            ]
             
-            formatted_history = format_conversation_history(conversation_history)
-            ai_response = chat_with_gemini(request.message, formatted_history, request.context or "consultant")
-            booking_result = {
-                "response_text": ai_response,
-                "booking_options": [],
-                "needs_availability_check": False,
-                "suggested_next_action": "provide_info"
-            }
-
-        ConversationService.save_bot_message(db, ai_response, getattr(conv, 'id'))
+            # Use the processed message from booking service
+            if ai_booking_result["success"]:
+                bot_reply = ai_booking_result["message"]
+            else:
+                bot_reply = ai_booking_result["message"]
+        
+        ConversationService.save_bot_message(db, bot_reply, getattr(conv, 'id'))
         ConversationService.increment_bot_response_count(db, conv)
         ConversationService.update_conversation_title(db, conv, request.message)
-
-        booking_options = [
-            BookingOption(**option) for option in booking_result.get("booking_options", [])
-        ]
-
-        return EnhancedChatResponse(
-            response=ai_response,
-            conversation_id=str(getattr(conv, 'id')),
-            is_appropriate=True,
-            moderation_action=moderation_data["violation_type"],
-            warning_message=moderation_data["warning_message"],
-            booking_options=booking_options,
-            needs_availability_check=booking_result.get("needs_availability_check", False),
-            suggested_next_action=booking_result.get("suggested_next_action", "provide_info"),
-            booking_analysis=analysis_data if 'analysis_data' in locals() else None,
-            booking_status=getattr(conv, 'booking_status', 'ongoing')
-        )
         
+        # Prepare response with AI booking data
+        response_data = {
+            "response": bot_reply,
+            "conversation_id": str(getattr(conv, 'id')),
+            "is_appropriate": True,
+            "moderation_action": moderation_data["violation_type"],
+            "warning_message": moderation_data["warning_message"],
+            "booking_options": ai_data.get("booking_options", []),
+            "needs_availability_check": ai_data.get("needs_availability_check", False),
+            "suggested_next_action": ai_data.get("suggested_next_action", "provide_info"),
+            "booking_analysis": ai_data.get("booking_analysis", None),
+            "booking_status": ai_booking_result["booking_status"] if ai_booking_result else getattr(conv, 'booking_status', 'ongoing'),
+            # AI Booking Response fields
+            "ai_is_schedule": ai_data.get("isSchedule", False),
+            "ai_booking_datetime": ai_data.get("datetime"),
+            "ai_booking_timezone": ai_data.get("timezone"),
+            "ai_booking_details": ai_booking_result["booking_details"] if ai_booking_result and ai_booking_result["success"] else None,
+            "email_sent": ai_booking_result["email_sent"] if ai_booking_result else None
+        }
+        
+        return EnhancedChatResponse(**response_data)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing chat request: {str(e)}")
+        logger.error(f"Error processing chat request: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error processing chat request: {str(e)}")
+
+@router.post("/ai/kb_response")
+async def proxy_kb_response(request: Request):
+    try:
+        input_data = await request.json()
+        logger.info(f"Proxying request to AI module: {input_data}")
+        async with httpx.AsyncClient(timeout=60) as client:
+            ai_response = await client.post(AI_MODULE_URL, json=input_data)
+        ai_response.raise_for_status()
+        logger.info(f"Received response from AI module: {ai_response.text}")
+        return ai_response.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"AI module returned error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=502, detail=f"AI module error: {e.response.text}")
+    except Exception as e:
+        logger.error(f"Error proxying to AI module: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 @router.get("/conversations", response_model=List[dict])
 async def get_conversations(

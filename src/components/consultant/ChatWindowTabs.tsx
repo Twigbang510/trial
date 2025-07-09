@@ -4,9 +4,8 @@ import { motion } from 'framer-motion';
 import chatbotApi from '@/lib/api/chatbot.api';
 import careerAnalysisApi, { type CareerAnalysisResponse } from '@/lib/api/career-analysis.api';
 import { ChatTab, MessageType, BookingOption } from '@/types/conversation.type';
-import BookingOptions from '@/components/BookingOptions';
-import ConfirmationButtons from '@/components/ConfirmationButtons';
 import BookingSuccessModal from '@/components/BookingSuccessModal';
+import { parseAIBookingResponse } from '@/lib/utils';
 
 interface ChatWindowTabsProps {
   activeTab: ChatTab;
@@ -580,6 +579,78 @@ const ChatWindowTabs = ({ activeTab, tabs, onAddMessage, onConversationChange, o
     onAddMessage(targetTabId, userMessage);
     setMessage('');
 
+    // Check for text-based booking interactions
+    const messageLower = message.toLowerCase().trim();
+    
+    // Check if user is confirming booking (Yes/No responses)
+    if (messageLower === 'yes' || messageLower === 'có' || messageLower === 'đồng ý' || messageLower === 'ok') {
+      // Find the last message with awaitingConfirmation
+      const lastMessages = activeTab.messages.slice(-5); // Check last 5 messages
+      const confirmationMessage = lastMessages.reverse().find(msg => msg.awaitingConfirmation);
+      
+      if (confirmationMessage?.awaitingConfirmation) {
+        await handleConfirmBooking(confirmationMessage.awaitingConfirmation.option);
+        setIsLoading(false);
+        return;
+      }
+    }
+    
+    if (messageLower === 'no' || messageLower === 'không' || messageLower === 'không đồng ý') {
+      // Find the last message with awaitingConfirmation
+      const lastMessages = activeTab.messages.slice(-5); // Check last 5 messages
+      const confirmationMessage = lastMessages.reverse().find(msg => msg.awaitingConfirmation);
+      
+      if (confirmationMessage?.awaitingConfirmation) {
+        await handleCancelBooking();
+        setIsLoading(false);
+        return;
+      }
+    }
+    
+    // Check if user is selecting a time slot
+    const timeSelectionPatterns = [
+      /book\s+(\d{1,2}:\d{2})/i,
+      /book\s+(\d{1,2})h/i,
+      /book\s+(\d{1,2})\s*giờ/i,
+      /(\d{1,2}:\d{2})/,
+      /(\d{1,2})h/,
+      /(\d{1,2})\s*giờ/,
+      /tôi\s+muốn\s+book\s+(\d{1,2}:\d{2})/i,
+      /tôi\s+muốn\s+book\s+(\d{1,2})h/i,
+      /đặt\s+lịch\s+(\d{1,2}:\d{2})/i,
+      /đặt\s+lịch\s+(\d{1,2})h/i,
+    ];
+    
+    let selectedTime = null;
+    for (const pattern of timeSelectionPatterns) {
+      const match = messageLower.match(pattern);
+      if (match) {
+        selectedTime = match[1];
+        break;
+      }
+    }
+    
+    if (selectedTime) {
+      // Find the last message with booking options
+      const lastMessages = activeTab.messages.slice(-5); // Check last 5 messages
+      const bookingMessage = lastMessages.reverse().find(msg => msg.bookingOptions && msg.bookingOptions.length > 0);
+      
+      if (bookingMessage?.bookingOptions) {
+        // Find matching booking option
+        const matchingOption = bookingMessage.bookingOptions.find(option => {
+          const optionTime = option.time.toLowerCase();
+          const selectedTimeLower = selectedTime.toLowerCase();
+          return optionTime.includes(selectedTimeLower) || selectedTimeLower.includes(optionTime);
+        });
+        
+        if (matchingOption) {
+          await handleBookingOptionSelect(matchingOption);
+          setIsLoading(false);
+          return;
+        }
+      }
+    }
+
     try {
       // Check if this is a career-related question and user has career analysis
       const isCareerQuestion = await checkIfCareerRelated(message);
@@ -677,6 +748,28 @@ const ChatWindowTabs = ({ activeTab, tabs, onAddMessage, onConversationChange, o
         };
 
         onAddMessage(targetTabId, botMessage);
+
+        // Handle AI booking response
+        if (response.ai_is_schedule && response.ai_booking_details) {
+          console.log('🎯 AI booking detected:', response);
+          
+          // Parse booking details
+          const bookingDetails = parseAIBookingResponse(response);
+          
+          if (bookingDetails) {
+            // Show booking success modal
+            setBookingSuccessModal({
+              isOpen: true,
+              bookingDetails: bookingDetails,
+              emailSent: response.email_sent || false
+            });
+            
+            // Update tab booking status
+            if (updateTabBookingStatus) {
+              updateTabBookingStatus(targetTabId, 'complete');
+            }
+          }
+        }
       }
 
       if (response.conversation_id && response.conversation_id > 0) {
@@ -1073,12 +1166,32 @@ const ChatWindowTabs = ({ activeTab, tabs, onAddMessage, onConversationChange, o
 
                 {/* =================== BOOKING OPTIONS =================== */}
                 {msg.bookingOptions && msg.bookingOptions.length > 0 && !isConversationCompleted && (
-                  <div className="mt-2">
-                    <BookingOptions 
-                      options={msg.bookingOptions} 
-                      onOptionSelect={handleBookingOptionSelect}
-                      disabled={isConversationCompleted}
-                    />
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700 mb-2">
+                      <strong>Available time slots:</strong>
+                    </p>
+                    <div className="space-y-2">
+                      {msg.bookingOptions.map((option, index) => (
+                        <div key={index} className="text-sm text-gray-700 bg-white p-2 rounded border">
+                          <div className="font-medium">
+                            {option.time} - {option.lecturer_name}
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            📚 {option.subject} | 📍 {option.location} | ⏱️ {option.duration_minutes} minutes
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            📅 {new Date(option.date).toLocaleDateString('vi-VN', {
+                              weekday: 'short',
+                              day: 'numeric',
+                              month: 'short'
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-blue-600 mt-2">
+                      💡 <strong>Please type the time you want to book</strong> (e.g., "I want to book at 9:00" or "Book 9:00")
+                    </p>
                   </div>
                 )}
 
@@ -1096,22 +1209,36 @@ const ChatWindowTabs = ({ activeTab, tabs, onAddMessage, onConversationChange, o
                   </div>
                 )}
 
-                {/* =================== CONFIRMATION BUTTONS =================== */}
+                {/* =================== CONFIRMATION MESSAGE =================== */}
                 {msg.awaitingConfirmation && !isConversationCompleted && (
-                  <div className="mt-4 flex justify-center">
-                    <ConfirmationButtons
-                      onConfirm={() => handleConfirmBooking(msg.awaitingConfirmation!.option)}
-                      onCancel={handleCancelBooking}
-                      confirmText="Yes"
-                      cancelText="No"
-                      disabled={!!confirmationProcessing || isConversationCompleted}
-                    />
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-700 mb-2">
+                      <strong>Booking Confirmation:</strong>
+                    </p>
+                    <div className="text-sm text-gray-700 bg-white p-2 rounded border mb-2">
+                      <div className="font-medium">
+                        {msg.awaitingConfirmation.option.time} - {msg.awaitingConfirmation.option.lecturer_name}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        📚 {msg.awaitingConfirmation.option.subject} | 📍 {msg.awaitingConfirmation.option.location}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        📅 {new Date(msg.awaitingConfirmation.option.date).toLocaleDateString('vi-VN', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short'
+                        })}
+                      </div>
+                    </div>
+                    <p className="text-xs text-yellow-600">
+                      💡 <strong>Please confirm by typing "Yes" or "No"</strong> to proceed with the booking
+                    </p>
                   </div>
                 )}
 
-                {/* Completion notice for confirmation buttons */}
+                {/* Completion notice for confirmation */}
                 {msg.awaitingConfirmation && isConversationCompleted && (
-                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <p className="text-sm text-green-700">✅ Booking confirmed - conversation completed</p>
                   </div>
                 )}

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start:backend": "cd backend && uvicorn app.main:app --reload"
+    "start:backend": "cd backend && uvicorn app.main:app"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.2",

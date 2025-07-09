@@ -65,6 +65,18 @@ export interface EnhancedChatApiResponse extends ChatApiResponse {
   booking_analysis?: any;
   email_sent?: boolean;
   booking_status?: string;
+  // AI Booking Response fields
+  ai_is_schedule?: boolean;
+  ai_booking_datetime?: string;
+  ai_booking_timezone?: string;
+  ai_booking_details?: {
+    date: string;
+    time: string;
+    lecturer_name: string;
+    subject: string;
+    location: string;
+    duration_minutes: number;
+  };
 }
 
 export interface ConversationApiResponse {

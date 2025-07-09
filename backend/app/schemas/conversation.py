@@ -106,4 +106,9 @@ class EnhancedChatResponse(ChatResponse):
     suggested_next_action: str = "provide_info"
     booking_analysis: Optional[dict] = None
     email_sent: Optional[bool] = None
-    booking_status: Optional[str] = None 
+    booking_status: Optional[str] = None
+    # AI Booking Response fields
+    ai_is_schedule: Optional[bool] = None
+    ai_booking_datetime: Optional[str] = None
+    ai_booking_timezone: Optional[str] = None
+    ai_booking_details: Optional[dict] = None 

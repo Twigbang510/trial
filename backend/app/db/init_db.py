@@ -61,4 +61,13 @@ def init_db():
         database.booking_slots.create_index("booking_date", name="slot_booking_date")
         database.booking_slots.create_index("status", name="slot_status")
     except Exception as e:
-        print(f"Index creation warning (booking_slots): {e}") 
+        print(f"Index creation warning (booking_slots): {e}")
+    
+    # Create indexes for ai_bookings collection
+    try:
+        database.ai_bookings.create_index("user_id", name="ai_booking_user_id")
+        database.ai_bookings.create_index("booking_date", name="ai_booking_date")
+        database.ai_bookings.create_index("status", name="ai_booking_status")
+        database.ai_bookings.create_index("created_at", name="ai_booking_created_at")
+    except Exception as e:
+        print(f"Index creation warning (ai_bookings): {e}") 

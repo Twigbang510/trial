@@ -46,22 +46,36 @@ class ConversationService:
     @staticmethod
     def save_user_message(db: Database, content: str, conversation_id: str):
         """Save user message to database"""
-        user_message = MessageCreate(
-            content=content,
-            sender="user",
-            is_appropriate=True
-        )
-        return message.create(db, obj_in=user_message, conversation_id=conversation_id)
+        try:
+            logger.info(f"Saving user message: {content} (conversation_id={conversation_id})")
+            user_message = MessageCreate(
+                content=content,
+                sender="user",
+                is_appropriate=True
+            )
+            result = message.create(db, obj_in=user_message, conversation_id=conversation_id)
+            logger.info(f"User message saved successfully (id={getattr(result, 'id', None)})")
+            return result
+        except Exception as e:
+            logger.error(f"Error saving user message: {str(e)} (conversation_id={conversation_id})")
+            raise
     
     @staticmethod
     def save_bot_message(db: Database, content: str, conversation_id: str):
         """Save bot message to database"""
-        bot_message = MessageCreate(
-            content=content,
-            sender="bot",
-            is_appropriate=True
-        )
-        return message.create(db, obj_in=bot_message, conversation_id=conversation_id)
+        try:
+            logger.info(f"Saving bot message: {content} (conversation_id={conversation_id})")
+            bot_message = MessageCreate(
+                content=content,
+                sender="bot",
+                is_appropriate=True
+            )
+            result = message.create(db, obj_in=bot_message, conversation_id=conversation_id)
+            logger.info(f"Bot message saved successfully (id={getattr(result, 'id', None)})")
+            return result
+        except Exception as e:
+            logger.error(f"Error saving bot message: {str(e)} (conversation_id={conversation_id})")
+            raise
     
     @staticmethod
     def get_conversation_history(db: Database, conversation_id: str) -> List:
